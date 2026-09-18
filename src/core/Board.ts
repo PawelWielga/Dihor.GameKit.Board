@@ -8,20 +8,28 @@ import type { Topology } from "../topology/index.js";
 import { BoardStateError } from "./errors.js";
 import type { PieceId, SpaceId } from "./ids.js";
 import type { BoardSnapshot, Piece, PiecePlacement, Space } from "./models.js";
+import type { OccupancyPolicy } from "./occupancy.js";
 
-export interface BoardOptions {
+export interface BoardOptions<
+  TSpaceData = unknown,
+  TPieceData = unknown,
+> {
   readonly topology?: Topology;
+  readonly occupancyPolicy?: OccupancyPolicy<TSpaceData, TPieceData>;
 }
 
 export class Board<TSpaceData = unknown, TPieceData = unknown> {
   readonly #spaces = new Map<SpaceId, Space<TSpaceData>>();
   readonly #pieces = new Map<PieceId, Piece<TPieceData>>();
   readonly #placements = new Map<PieceId, SpaceId>();
+  readonly #pieceIdsBySpace = new Map<SpaceId, Set<PieceId>>();
+  readonly #occupancyPolicy?: OccupancyPolicy<TSpaceData, TPieceData>;
 
   public readonly topology?: Topology;
 
-  public constructor(options: BoardOptions = {}) {
+  public constructor(options: BoardOptions<TSpaceData, TPieceData> = {}) {
     this.topology = options.topology;
+    this.#occupancyPolicy = options.occupancyPolicy;
   }
 
   public addSpace(space: Space<TSpaceData>): Space<TSpaceData> {
@@ -31,6 +39,7 @@ export class Board<TSpaceData = unknown, TPieceData = unknown> {
 
     const stored = Object.freeze({ ...space });
     this.#spaces.set(stored.id, stored);
+    this.#pieceIdsBySpace.set(stored.id, new Set());
     return stored;
   }
 
@@ -39,15 +48,15 @@ export class Board<TSpaceData = unknown, TPieceData = unknown> {
       return false;
     }
 
-    for (const placedSpaceId of this.#placements.values()) {
-      if (placedSpaceId === spaceId) {
-        throw new BoardStateError(
-          "SPACE_OCCUPIED",
-          `Space '${spaceId}' cannot be removed while it contains a piece.`,
-        );
-      }
+    const occupantIds = this.#pieceIdsBySpace.get(spaceId);
+    if (occupantIds !== undefined && occupantIds.size > 0) {
+      throw new BoardStateError(
+        "SPACE_OCCUPIED",
+        `Space '${spaceId}' cannot be removed while it contains a piece.`,
+      );
     }
 
+    this.#pieceIdsBySpace.delete(spaceId);
     return this.#spaces.delete(spaceId);
   }
 
@@ -59,17 +68,22 @@ export class Board<TSpaceData = unknown, TPieceData = unknown> {
     this.#requireSpace(spaceId);
 
     const stored = Object.freeze({ ...piece });
+    this.#assertOccupancyAllowed(stored, undefined, spaceId);
+
     this.#pieces.set(stored.id, stored);
     this.#placements.set(stored.id, spaceId);
+    this.#requireOccupantIds(spaceId).add(stored.id);
     return stored;
   }
 
   public removePiece(pieceId: PieceId): boolean {
-    if (!this.#pieces.delete(pieceId)) {
+    const spaceId = this.#placements.get(pieceId);
+    if (spaceId === undefined || !this.#pieces.delete(pieceId)) {
       return false;
     }
 
     this.#placements.delete(pieceId);
+    this.#requireOccupantIds(spaceId).delete(pieceId);
     return true;
   }
 
@@ -105,6 +119,26 @@ export class Board<TSpaceData = unknown, TPieceData = unknown> {
     }
 
     return Object.freeze({ pieceId, spaceId });
+  }
+
+  public getPiecesAt(spaceId: SpaceId): readonly Piece<TPieceData>[] {
+    this.#requireSpace(spaceId);
+
+    return [...this.#requireOccupantIds(spaceId)].map((pieceId) => {
+      const piece = this.#pieces.get(pieceId);
+      if (piece === undefined) {
+        throw new Error(
+          `Board occupancy is inconsistent: piece '${pieceId}' is missing.`,
+        );
+      }
+
+      return piece;
+    });
+  }
+
+  public isSpaceOccupied(spaceId: SpaceId): boolean {
+    this.#requireSpace(spaceId);
+    return this.#requireOccupantIds(spaceId).size > 0;
   }
 
   public moveTo(pieceId: PieceId, toSpaceId: SpaceId): MovementResult {
@@ -168,7 +202,14 @@ export class Board<TSpaceData = unknown, TPieceData = unknown> {
       throw new MovementError("INVALID_TOPOLOGY", "Movement path cannot be empty.");
     }
 
-    this.#placements.set(pieceId, toSpaceId);
+    const piece = this.#requirePiece(pieceId);
+    this.#assertOccupancyAllowed(piece, fromSpaceId, toSpaceId);
+
+    if (toSpaceId !== fromSpaceId) {
+      this.#requireOccupantIds(fromSpaceId).delete(pieceId);
+      this.#requireOccupantIds(toSpaceId).add(pieceId);
+      this.#placements.set(pieceId, toSpaceId);
+    }
 
     return Object.freeze({
       pieceId,
@@ -176,6 +217,34 @@ export class Board<TSpaceData = unknown, TPieceData = unknown> {
       toSpaceId,
       path,
     });
+  }
+
+  #assertOccupancyAllowed(
+    piece: Piece<TPieceData>,
+    fromSpaceId: SpaceId | undefined,
+    toSpaceId: SpaceId,
+  ): void {
+    if (this.#occupancyPolicy === undefined) {
+      return;
+    }
+
+    const occupants = this.getPiecesAt(toSpaceId).filter(
+      (occupant) => occupant.id !== piece.id,
+    );
+    const allowed = this.#occupancyPolicy(Object.freeze({
+      piece,
+      fromSpaceId,
+      toSpace: this.#requireSpace(toSpaceId),
+      occupants: Object.freeze(occupants),
+      occupantPieceIds: Object.freeze(occupants.map((occupant) => occupant.id)),
+    }));
+
+    if (!allowed) {
+      throw new BoardStateError(
+        "OCCUPANCY_REJECTED",
+        `Occupancy policy rejected piece '${piece.id}' on space '${toSpaceId}'.`,
+      );
+    }
   }
 
   #requireMovementTopology(): Topology {
@@ -189,6 +258,15 @@ export class Board<TSpaceData = unknown, TPieceData = unknown> {
     return this.topology;
   }
 
+  #requirePiece(pieceId: PieceId): Piece<TPieceData> {
+    const piece = this.#pieces.get(pieceId);
+    if (piece === undefined) {
+      throw new BoardStateError("UNKNOWN_PIECE", `Piece '${pieceId}' does not exist.`);
+    }
+
+    return piece;
+  }
+
   #requireSpace(spaceId: SpaceId): Space<TSpaceData> {
     const space = this.#spaces.get(spaceId);
     if (space === undefined) {
@@ -196,5 +274,16 @@ export class Board<TSpaceData = unknown, TPieceData = unknown> {
     }
 
     return space;
+  }
+
+  #requireOccupantIds(spaceId: SpaceId): Set<PieceId> {
+    const occupantIds = this.#pieceIdsBySpace.get(spaceId);
+    if (occupantIds === undefined) {
+      throw new Error(
+        `Board occupancy is inconsistent: space '${spaceId}' has no occupancy index.`,
+      );
+    }
+
+    return occupantIds;
   }
 }
