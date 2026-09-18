@@ -1433,10 +1433,21 @@ moveByButton.addEventListener("click", () => {
   void runMovement(() => board.moveBy(pieceId, distance));
 });
 
-for (const input of [blockedSpaceInput, singleOccupancyInput]) {
-  input.addEventListener("input", renderDiagnostics);
-  input.addEventListener("change", renderDiagnostics);
-}
+blockedSpaceInput.addEventListener("input", () => {
+  renderBoard();
+  renderDiagnostics();
+});
+blockedSpaceInput.addEventListener("change", () => {
+  renderBoard();
+  renderDiagnostics();
+});
+singleOccupancyInput.addEventListener("input", renderDiagnostics);
+singleOccupancyInput.addEventListener("change", renderDiagnostics);
+
+moveToSpaceInput.addEventListener("change", () => {
+  renderBoard();
+  renderDiagnostics();
+});
 
 for (const tab of diagnosticTabs) {
   tab.addEventListener("click", () => {
@@ -1456,6 +1467,7 @@ function rerenderActiveRendererAfterResize(): void {
       full3dRenderer.render(full3dCanvas, {
         snapshot: board.snapshot(),
         layout: createPresentationLayout(),
+        appearance: activeAppearance,
         ...(lastMovement ? { movement: lastMovement } : {}),
       });
       return;
@@ -1465,6 +1477,7 @@ function rerenderActiveRendererAfterResize(): void {
       hybridRenderer.render(hybridCanvas, {
         snapshot: board.snapshot(),
         layout: createPresentationLayout(),
+        appearance: activeAppearance,
         ...(lastMovement ? { movement: lastMovement } : {}),
       });
     }
