@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <meta
+      name="description"
+      content="Interactive Dihor.GameKit.Board playground for board topologies, pieces, movement paths, rules and events."
+    />
+    <title>Dihor.GameKit.Board Playground</title>
+    <link rel="stylesheet" href="./demo.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Dihor / GameKit / Board</p>
+          <h1>Board movement playground</h1>
+          <p class="hero-copy">
+            Build a topology, place pieces and inspect the exact movement paths and events returned
+            by the public Dihor.GameKit.Board API.
+          </p>
+        </div>
+        <div class="hero-badge" aria-label="Demo technology">
+          <span>TypeScript</span>
+          <span>Vite</span>
+          <span>Public API only</span>
+        </div>
+      </header>
+
+      <div class="workspace">
+        <aside class="control-panel" aria-label="Board controls">
+          <section class="control-section">
+            <div class="section-heading">
+              <span class="section-index">01</span>
+              <div>
+                <h2>Topology</h2>
+                <p>Rebuilding the topology resets pieces and movement history.</p>
+              </div>
+            </div>
+
+            <label class="field">
+              <span>Topology type</span>
+              <select id="topology-kind">
+                <option value="linear" selected>Linear track</option>
+                <option value="looping">Looping track</option>
+                <option value="grid">Square grid</option>
+                <option value="graph">Arbitrary graph</option>
+              </select>
+            </label>
+
+            <div id="track-options" class="config-panel">
+              <label class="field">
+                <span>Number of spaces</span>
+                <input id="track-count" type="number" min="1" max="40" step="1" value="8" />
+              </label>
+            </div>
+
+            <div id="grid-options" class="config-panel" hidden>
+              <div class="field-grid field-grid--two">
+                <label class="field">
+                  <span>Width</span>
+                  <input id="grid-width" type="number" min="1" max="12" step="1" value="5" />
+                </label>
+                <label class="field">
+                  <span>Height</span>
+                  <input id="grid-height" type="number" min="1" max="12" step="1" value="4" />
+                </label>
+              </div>
+            </div>
+
+            <div id="graph-options" class="config-panel" hidden>
+              <label class="field">
+                <span>Space IDs</span>
+                <textarea id="graph-spaces" rows="2">a, b, c, d, e</textarea>
+              </label>
+              <label class="field">
+                <span>Connections</span>
+                <textarea id="graph-connections" rows="6">a -- b
+b -- c
+c -- d
+d -- a
+b -> e
+e -> c</textarea>
+              </label>
+              <p class="hint">
+                One connection per line. Use <code>a -- b</code> for two-way and
+                <code>a -&gt; b</code> for directed.
+              </p>
+            </div>
+
+            <button id="rebuild-board" class="button button--primary" type="button">
+              Rebuild board
+            </button>
+          </section>
+
+          <section class="control-section">
+            <div class="section-heading">
+              <span class="section-index">02</span>
+              <div>
+                <h2>Pieces</h2>
+                <p>Add, select and remove logical pieces.</p>
+              </div>
+            </div>
+
+            <div class="field-grid field-grid--two">
+              <label class="field">
+                <span>Piece ID</span>
+                <input id="piece-id" type="text" value="player-1" autocomplete="off" />
+              </label>
+              <label class="field">
+                <span>Initial space</span>
+                <select id="piece-space"></select>
+              </label>
+            </div>
+
+            <button id="add-piece" class="button" type="button">Add piece</button>
+
+            <label class="field field--spaced">
+              <span>Selected piece</span>
+              <select id="selected-piece"></select>
+            </label>
+
+            <button id="remove-piece" class="button button--danger" type="button">
+              Remove selected
+            </button>
+          </section>
+
+          <section class="control-section">
+            <div class="section-heading">
+              <span class="section-index">03</span>
+              <div>
+                <h2>Movement</h2>
+                <p>Movement is validated by the library before presentation begins.</p>
+              </div>
+            </div>
+
+            <label class="field">
+              <span>moveTo destination</span>
+              <select id="move-to-space"></select>
+            </label>
+            <button id="move-to" class="button button--primary" type="button">
+              moveTo
+            </button>
+
+            <div class="field-grid field-grid--move">
+              <label class="field">
+                <span>moveBy distance</span>
+                <input id="move-distance" type="number" step="1" value="1" />
+              </label>
+              <button id="move-by" class="button button--primary button--align-end" type="button">
+                moveBy
+              </button>
+            </div>
+            <p id="move-by-hint" class="hint"></p>
+          </section>
+
+          <section class="control-section">
+            <div class="section-heading">
+              <span class="section-index">04</span>
+              <div>
+                <h2>Rules</h2>
+                <p>Small demo rules exercise the public validation hooks.</p>
+              </div>
+            </div>
+
+            <label class="field">
+              <span>Blocked destination ID</span>
+              <input
+                id="blocked-space"
+                type="text"
+                placeholder="Leave empty to allow all destinations"
+                autocomplete="off"
+              />
+            </label>
+
+            <label class="check-field">
+              <input id="single-occupancy" type="checkbox" />
+              <span>
+                <strong>Single occupancy</strong>
+                <small>Reject a piece if another piece already occupies the destination.</small>
+              </span>
+            </label>
+          </section>
+        </aside>
+
+        <section class="preview-column">
+          <section class="preview-panel">
+            <div class="preview-header">
+              <div>
+                <p class="eyebrow">Authoritative state</p>
+                <h2 id="board-title">Linear track</h2>
+              </div>
+              <div id="status" class="status" data-tone="ok">Ready</div>
+            </div>
+
+            <div id="board-stage" class="board-stage" aria-live="polite"></div>
+
+            <div class="path-panel">
+              <div>
+                <span class="path-label">Last MovementPath</span>
+                <p id="path-summary">No movement yet.</p>
+              </div>
+              <div id="path-chips" class="path-chips" aria-label="Visited spaces"></div>
+            </div>
+          </section>
+
+          <details class="diagnostics" open>
+            <summary>
+              <span>
+                <strong>Diagnostics</strong>
+                <small>Snapshot, occupancy, rules, MovementPath and emitted events</small>
+              </span>
+            </summary>
+            <div class="diagnostics-body">
+              <div class="diagnostic-tabs" role="tablist" aria-label="Diagnostic view">
+                <button class="tab is-active" data-diagnostic="state" type="button">State</button>
+                <button class="tab" data-diagnostic="events" type="button">Events</button>
+              </div>
+              <pre id="diagnostics-json"></pre>
+            </div>
+          </details>
+        </section>
+      </div>
+    </main>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
