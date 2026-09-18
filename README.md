@@ -78,6 +78,18 @@ src/
 
 The core must not depend on Three.js, Flutter, Unity, DOM APIs, WebSockets or another concrete presentation/transport technology.
 
+## Rendering direction
+
+Rendering remains separate from the authoritative board model. The reference/demo presentation is planned to support three configurable modes:
+
+- `TopDown` — simple orthographic top-down presentation,
+- `FlatBoard3DPieces` — a visually flat orthographic board combined with separately rendered 3D pieces; this is the preferred showcase mode,
+- `Full3D` — board and pieces rendered together in a configurable 3D scene.
+
+Switching render modes must not change board state, movement rules or piece positions.
+
+See [Rendering architecture](docs/rendering.md) for the multi-pass camera model and presentation boundary.
+
 ## Dihor.GameKit
 
 The repositories share a common identity and engineering direction:
