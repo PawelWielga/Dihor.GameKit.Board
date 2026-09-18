@@ -1,6 +1,6 @@
 import type { SpaceId } from "../core/index.js";
 import { TopologyError } from "./errors.js";
-import type { Topology } from "./Topology.js";
+import type { OrderedTopology } from "./Topology.js";
 
 export type LinearDirection = "forward" | "backward";
 
@@ -14,7 +14,7 @@ export interface LinearTopologyOptions {
  * Positive offsets move forward, negative offsets move backward.
  * Non-looping tracks return undefined when traversal would cross an end.
  */
-export class LinearTopology implements Topology {
+export class LinearTopology implements OrderedTopology {
   readonly #spaceIds: readonly SpaceId[];
   readonly #indexBySpaceId: ReadonlyMap<SpaceId, number>;
 
