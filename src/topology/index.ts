@@ -8,3 +8,5 @@ export type {
   LinearDirection,
   LinearTopologyOptions,
 } from "./LinearTopology.js";
+export { SquareGridTopology } from "./SquareGridTopology.js";
+export type { SquareGridCoordinate } from "./SquareGridTopology.js";
