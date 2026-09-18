@@ -4,9 +4,11 @@ import {
   CylinderGeometry,
   DirectionalLight,
   Group,
+  Material,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  Object3D,
   OrthographicCamera,
   PCFSoftShadowMap,
   PerspectiveCamera,
@@ -17,20 +19,35 @@ import {
   ShadowMaterial,
   SphereGeometry,
   SRGBColorSpace,
+  Texture,
   Vector2,
   Vector3,
   WebGLRenderer,
 } from "three";
-import type { PieceId, SpaceId } from "../core/index.js";
+import type { Piece, PieceId, Space, SpaceId } from "../core/index.js";
 import type { MovementResult } from "../movement/index.js";
 import {
   BoardRenderMode,
   mapPiecesToPresentation,
+  RendererAssetCache,
+  RendererAssetKind,
+  resolvePieceAppearance,
+  resolveSpaceAppearance,
 } from "../presentation/index.js";
 import type {
   BoardRenderInput,
   BoardRenderer,
+  PieceAppearance,
+  SpaceAppearance,
 } from "../presentation/index.js";
+import {
+  applyThreeAppearanceTransform,
+  resolveThreeAppearanceTransform,
+} from "./appearanceMapping.js";
+import type {
+  ThreeBoardAsset,
+  ThreeBoardAssetProvider,
+} from "./assets.js";
 import {
   calculateHybridLayoutFrame,
   estimateHybridTileSize,
@@ -47,6 +64,7 @@ export interface FlatBoard3DPiecesRendererOptions {
   readonly cameraFov?: number;
   readonly shadows?: boolean;
   readonly pixelRatio?: number;
+  readonly assetProvider?: ThreeBoardAssetProvider;
 }
 
 export interface HybridMovementAnimationOptions {
@@ -60,8 +78,10 @@ interface HybridContext {
   pieceScene: Scene;
   pieceCamera: PerspectiveCamera;
   frame: HybridLayoutFrame;
-  readonly pieceGroups: Map<PieceId, Group>;
+  readonly pieceGroups: Map<PieceId, Object3D>;
+  readonly pieceOffsets: Map<PieceId, Vector3>;
   readonly groundBySpace: Map<SpaceId, Vector3>;
+  lastInput?: BoardRenderInput;
   animationToken: number;
   width: number;
   height: number;
@@ -71,8 +91,12 @@ export class FlatBoard3DPiecesRenderer
 implements BoardRenderer<HTMLCanvasElement> {
   public readonly mode = BoardRenderMode.FlatBoard3DPieces;
 
-  readonly #options: Required<FlatBoard3DPiecesRendererOptions>;
+  readonly #options: Required<
+    Omit<FlatBoard3DPiecesRendererOptions, "assetProvider">
+  >;
+  readonly #assetCache?: RendererAssetCache<ThreeBoardAsset>;
   readonly #contexts = new Map<HTMLCanvasElement, HybridContext>();
+  #assetRerenderScheduled = false;
 
   public constructor(options: FlatBoard3DPiecesRendererOptions = {}) {
     this.#options = {
@@ -85,6 +109,12 @@ implements BoardRenderer<HTMLCanvasElement> {
       shadows: options.shadows ?? true,
       pixelRatio: positive(options.pixelRatio ?? 1, "pixelRatio"),
     };
+
+    if (options.assetProvider) {
+      this.#assetCache = new RendererAssetCache(options.assetProvider, {
+        onSettled: () => this.#scheduleAssetRerender(),
+      });
+    }
   }
 
   public render(
@@ -116,6 +146,8 @@ implements BoardRenderer<HTMLCanvasElement> {
     );
     const token = ++context.animationToken;
     const path = movement.path;
+    const visualOffset = context.pieceOffsets.get(movement.pieceId) ??
+      new Vector3();
 
     if (path.length <= 1 || typeof requestAnimationFrame !== "function") {
       return;
@@ -126,7 +158,7 @@ implements BoardRenderer<HTMLCanvasElement> {
       ? undefined
       : context.groundBySpace.get(startSpaceId);
     if (start) {
-      piece.position.copy(start);
+      piece.position.copy(start).add(visualOffset);
       this.#renderContext(context);
     }
 
@@ -147,7 +179,15 @@ implements BoardRenderer<HTMLCanvasElement> {
         continue;
       }
 
-      await this.#animateSegment(context, piece, from, to, duration, token);
+      await this.#animateSegment(
+        context,
+        piece,
+        from,
+        to,
+        visualOffset,
+        duration,
+        token,
+      );
     }
   }
 
@@ -168,6 +208,8 @@ implements BoardRenderer<HTMLCanvasElement> {
     for (const target of [...this.#contexts.keys()]) {
       this.disposeTarget(target);
     }
+
+    void this.#assetCache?.dispose();
   }
 
   #ensureContext(target: HTMLCanvasElement): HybridContext {
@@ -185,7 +227,7 @@ implements BoardRenderer<HTMLCanvasElement> {
       });
     } catch (error) {
       throw new Error(
-        `FlatBoard3DPieces renderer could not create WebGL: ${String(error)}`,
+        "FlatBoard3DPieces renderer could not create WebGL: " + String(error),
       );
     }
 
@@ -208,6 +250,7 @@ implements BoardRenderer<HTMLCanvasElement> {
         aspect: 1,
       },
       pieceGroups: new Map(),
+      pieceOffsets: new Map(),
       groundBySpace: new Map(),
       animationToken: 0,
       width: 0,
@@ -224,9 +267,11 @@ implements BoardRenderer<HTMLCanvasElement> {
     input: BoardRenderInput,
   ): void {
     context.animationToken += 1;
+    context.lastInput = input;
     disposeScene(context.boardScene);
     disposeScene(context.pieceScene);
     context.pieceGroups.clear();
+    context.pieceOffsets.clear();
     context.groundBySpace.clear();
 
     const width = Math.max(1, Math.round(target.clientWidth || target.width || 800));
@@ -256,20 +301,47 @@ implements BoardRenderer<HTMLCanvasElement> {
 
     const tileSize = estimateHybridTileSize(input.layout);
     const path = new Set(input.movement?.path ?? []);
+    const spaceById = new Map<SpaceId, Space>(
+      input.snapshot.spaces.map((space) => [space.id, space]),
+    );
 
     for (const space of input.layout.getSpaces()) {
+      const domainSpace = spaceById.get(space.spaceId) ?? { id: space.spaceId };
+      const appearance = input.appearance
+        ? resolveSpaceAppearance(domainSpace, input.appearance)
+        : undefined;
+      const texture = appearance?.texture
+        ? this.#textureAsset(appearance.texture, "space")
+        : undefined;
+      const color = appearance?.color ??
+        (path.has(space.spaceId)
+          ? this.#options.pathColor
+          : this.#options.boardColor);
+      const opacity = appearance?.opacity ?? 1;
       const material = new MeshBasicMaterial({
-        color: new Color(
-          path.has(space.spaceId)
-            ? this.#options.pathColor
-            : this.#options.boardColor,
-        ),
+        color: new Color(color),
+        opacity,
+        transparent: opacity < 1,
+        ...(texture ? { map: texture } : {}),
       });
       const tile = new Mesh(
         new PlaneGeometry(tileSize, tileSize),
         material,
       );
-      tile.position.set(space.position.x, -space.position.z, 0);
+
+      if (appearance) {
+        const transform = resolveThreeAppearanceTransform(appearance);
+        tile.position.set(
+          space.position.x + transform.offset.x,
+          -(space.position.z + transform.offset.z),
+          transform.offset.y,
+        );
+        tile.scale.set(transform.scale.x, transform.scale.z, 1);
+        tile.rotation.z = -transform.rotation.y;
+      } else {
+        tile.position.set(space.position.x, -space.position.z, 0);
+      }
+
       boardScene.add(tile);
     }
 
@@ -312,13 +384,18 @@ implements BoardRenderer<HTMLCanvasElement> {
 
       if (!raycaster.ray.intersectPlane(groundPlane, ground)) {
         throw new Error(
-          `Could not align 3D piece pass with board space '${space.spaceId}'.`,
+          "Could not align 3D piece pass with board space '" +
+          space.spaceId +
+          "'.",
         );
       }
 
       context.groundBySpace.set(space.spaceId, ground.clone());
     }
 
+    const pieceById = new Map<PieceId, Piece>(
+      input.snapshot.pieces.map((piece) => [piece.id, piece]),
+    );
     const occupancy = new Map<SpaceId, PieceId[]>();
     for (const piece of mapPiecesToPresentation(input.snapshot, input.layout)) {
       const list = occupancy.get(piece.spaceId) ?? [];
@@ -333,17 +410,31 @@ implements BoardRenderer<HTMLCanvasElement> {
       }
 
       pieceIds.forEach((pieceId, index) => {
-        const group = createPawn(
-          pieceId,
-          this.#options.pieceRadius,
-          this.#options.pieceHeight,
-          this.#options.shadows,
-        );
-        const offset = (index - (pieceIds.length - 1) / 2) *
+        const domainPiece = pieceById.get(pieceId) ?? { id: pieceId };
+        const appearance = input.appearance
+          ? resolvePieceAppearance(domainPiece, input.appearance)
+          : undefined;
+        const object = this.#createPieceVisual(pieceId, appearance);
+        const lateralOffset = (index - (pieceIds.length - 1) / 2) *
           this.#options.pieceRadius * 1.7;
-        group.position.set(ground.x + offset, ground.y, ground.z);
-        context.pieceGroups.set(pieceId, group);
-        pieceScene.add(group);
+        object.position.set(ground.x + lateralOffset, ground.y, ground.z);
+
+        const visualOffset = new Vector3(lateralOffset, 0, 0);
+        if (appearance) {
+          const transform = resolveThreeAppearanceTransform(appearance);
+          visualOffset.add(
+            new Vector3(
+              transform.offset.x,
+              transform.offset.y,
+              transform.offset.z,
+            ),
+          );
+          applyThreeAppearanceTransform(object, appearance);
+        }
+
+        context.pieceOffsets.set(pieceId, visualOffset);
+        context.pieceGroups.set(pieceId, object);
+        pieceScene.add(object);
       });
     }
 
@@ -351,6 +442,96 @@ implements BoardRenderer<HTMLCanvasElement> {
     context.boardCamera = boardCamera;
     context.pieceScene = pieceScene;
     context.pieceCamera = pieceCamera;
+  }
+
+  #createPieceVisual(
+    pieceId: PieceId,
+    appearance: PieceAppearance | undefined,
+  ): Object3D {
+    if (appearance?.assetKey) {
+      const asset = this.#asset(
+        appearance.assetKey,
+        RendererAssetKind.PieceVisual,
+        "piece",
+      );
+
+      if (asset?.type === "piece-visual") {
+        return asset.create({ pieceId, appearance });
+      }
+
+      if (asset?.type === "model") {
+        return asset.create();
+      }
+    }
+
+    const material = appearance?.material
+      ? this.#materialAsset(appearance.material, "piece")
+      : undefined;
+    const texture = appearance?.texture
+      ? this.#textureAsset(appearance.texture, "piece")
+      : undefined;
+
+    return createPawn(
+      pieceId,
+      this.#options.pieceRadius,
+      this.#options.pieceHeight,
+      this.#options.shadows,
+      appearance,
+      material,
+      texture,
+    );
+  }
+
+  #asset(
+    key: string,
+    kind: (typeof RendererAssetKind)[keyof typeof RendererAssetKind],
+    entity: "space" | "piece",
+  ): ThreeBoardAsset | undefined {
+    return this.#assetCache?.request({
+      key,
+      kind,
+      entity,
+    }).current.resource;
+  }
+
+  #textureAsset(
+    key: string,
+    entity: "space" | "piece",
+  ): Texture | undefined {
+    const asset = this.#asset(key, RendererAssetKind.Texture, entity);
+    return asset?.type === "texture" ? asset.texture : undefined;
+  }
+
+  #materialAsset(
+    key: string,
+    entity: "space" | "piece",
+  ): Material | undefined {
+    const asset = this.#asset(key, RendererAssetKind.Material, entity);
+    return asset?.type === "material" ? asset.material.clone() : undefined;
+  }
+
+  #scheduleAssetRerender(): void {
+    if (this.#assetRerenderScheduled) {
+      return;
+    }
+
+    this.#assetRerenderScheduled = true;
+    queueMicrotask(() => {
+      this.#assetRerenderScheduled = false;
+
+      for (const [target, context] of this.#contexts) {
+        const input = context.lastInput;
+        if (!input) {
+          continue;
+        }
+
+        try {
+          this.render(target, input);
+        } catch {
+          // Keep the previously rendered fallback frame.
+        }
+      }
+    });
   }
 
   #renderContext(context: HybridContext): void {
@@ -362,12 +543,16 @@ implements BoardRenderer<HTMLCanvasElement> {
 
   #animateSegment(
     context: HybridContext,
-    piece: Group,
+    piece: Object3D,
     from: Vector3,
     to: Vector3,
+    visualOffset: Vector3,
     duration: number,
     token: number,
   ): Promise<void> {
+    const visualFrom = from.clone().add(visualOffset);
+    const visualTo = to.clone().add(visualOffset);
+
     return new Promise((resolve) => {
       const started = performance.now();
 
@@ -379,12 +564,15 @@ implements BoardRenderer<HTMLCanvasElement> {
 
         const progress = Math.min(1, (now - started) / duration);
         const eased = progress * progress * (3 - 2 * progress);
-        piece.position.lerpVectors(from, to, eased);
-        piece.position.y = Math.sin(Math.PI * progress) * 0.2;
+        piece.position.lerpVectors(visualFrom, visualTo, eased);
+        piece.position.y =
+          visualFrom.y +
+          (visualTo.y - visualFrom.y) * eased +
+          Math.sin(Math.PI * progress) * 0.2;
         this.#renderContext(context);
 
         if (progress >= 1) {
-          piece.position.copy(to);
+          piece.position.copy(visualTo);
           this.#renderContext(context);
           resolve();
           return;
@@ -403,13 +591,27 @@ function createPawn(
   radius: number,
   height: number,
   shadows: boolean,
+  appearance?: PieceAppearance,
+  suppliedMaterial?: Material,
+  texture?: Texture,
 ): Group {
   const group = new Group();
-  const material = new MeshStandardMaterial({
-    color: deterministicColor(pieceId),
+  const opacity = appearance?.opacity ?? 1;
+  const material = suppliedMaterial ?? new MeshStandardMaterial({
+    color: appearance?.color
+      ? new Color(appearance.color)
+      : deterministicColor(pieceId),
     roughness: 0.48,
     metalness: 0.04,
+    opacity,
+    transparent: opacity < 1,
+    ...(texture ? { map: texture } : {}),
   });
+
+  if (suppliedMaterial) {
+    material.opacity = opacity;
+    material.transparent = material.transparent || opacity < 1;
+  }
 
   const body = new Mesh(
     new CylinderGeometry(radius * 0.72, radius, height * 0.68, 24),
@@ -441,24 +643,37 @@ function deterministicColor(value: string): Color {
 }
 
 function disposeScene(scene: Scene): void {
+  const geometries = new Set<{ dispose(): void }>();
+  const materials = new Set<Material>();
+
   scene.traverse((object) => {
     const mesh = object as Mesh;
-    mesh.geometry?.dispose();
+    if (mesh.geometry) {
+      geometries.add(mesh.geometry);
+    }
 
     const material = mesh.material;
     if (Array.isArray(material)) {
       for (const item of material) {
-        item.dispose();
+        materials.add(item);
       }
-    } else {
-      material?.dispose();
+    } else if (material) {
+      materials.add(material);
     }
   });
+
+  for (const geometry of geometries) {
+    geometry.dispose();
+  }
+
+  for (const material of materials) {
+    material.dispose();
+  }
 }
 
 function positive(value: number, label: string): number {
   if (!Number.isFinite(value) || value <= 0) {
-    throw new RangeError(`${label} must be greater than zero.`);
+    throw new RangeError(label + " must be greater than zero.");
   }
 
   return value;
