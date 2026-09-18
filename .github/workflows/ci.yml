@@ -36,8 +36,14 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Typecheck demo
+        run: npm run typecheck:demo
+
       - name: Test
         run: npm test
 
-      - name: Build
+      - name: Build library
         run: npm run build
+
+      - name: Build demo
+        run: npm run build:demo

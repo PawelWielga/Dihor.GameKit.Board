@@ -94,6 +94,36 @@ or a game-specific networking layer is responsible for host/client delivery,
 ordering, reliability and reconnect/replay behavior. Renderers should animate
 from the authoritative path/state rather than become a source of game state.
 
+## Interactive demo
+
+The repository includes a framework-free Vite playground that consumes only the
+package's public API. It supports graph, linear, looping and square-grid
+topologies, piece placement, `moveTo()`, `moveBy()`, movement rules,
+occupancy checks, `MovementPath` visualization and movement-event diagnostics.
+
+Published locations:
+
+- main: https://pawelwielga.github.io/Dihor.GameKit.Board/
+- dev: https://pawelwielga.github.io/Dihor.GameKit.Board/dev/
+
+The Pages workflow publishes only validated branch commits. During the first
+rollout, deployment starts once both `main` and `dev` contain demo support.
+
+Run the demo locally:
+
+```bash
+npm install
+npm run dev:demo
+```
+
+Validate the production demo bundle:
+
+```bash
+npm run build:demo
+```
+
+Generated `dist-demo/` output is intentionally not committed.
+
 ## Architecture direction
 
 ```text
