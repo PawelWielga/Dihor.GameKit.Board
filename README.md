@@ -94,6 +94,26 @@ or a game-specific networking layer is responsible for host/client delivery,
 ordering, reliability and reconnect/replay behavior. Renderers should animate
 from the authoritative path/state rather than become a source of game state.
 
+## Rendering boundary
+
+Rendering is configured outside the authoritative `Board`. The public
+presentation API exposes `BoardRenderMode.TopDown`,
+`BoardRenderMode.FlatBoard3DPieces` and `BoardRenderMode.Full3D`, plus
+renderer-neutral coordinate layouts.
+
+```ts
+const topology = new SquareGridTopology(8, 8);
+const layout = createSquareGridSpaceLayout(topology, { cellSize: 1.25 });
+
+const renderInput = {
+  snapshot: board.snapshot(),
+  layout,
+};
+```
+
+Camera, zoom, lighting, materials and animation state remain presentation-only.
+See [docs/rendering.md](docs/rendering.md) for the full boundary.
+
 ## Interactive demo
 
 The repository includes a framework-free Vite playground that consumes only the
@@ -131,8 +151,9 @@ src/
 ├── core/       # Board, Space, Piece, Position and domain results
 ├── topology/   # Graph, linear and grid topology implementations
 ├── movement/   # Movement calculation and validation rules
-├── events/     # Versioned transport-neutral movement contracts
-└── index.ts    # Small recommended public API
+├── events/       # Versioned transport-neutral movement contracts
+├── presentation/ # Renderer-neutral modes and coordinate mapping
+└── index.ts      # Small recommended public API
 ```
 
 The core must not depend on Three.js, Flutter, Unity, DOM APIs, WebSockets or another concrete presentation/transport technology.
