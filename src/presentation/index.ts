@@ -1,3 +1,25 @@
+export {
+  AppearanceState,
+  DEFAULT_PIECE_APPEARANCE,
+  DEFAULT_SPACE_APPEARANCE,
+  resolvePieceAppearance,
+  resolveSpaceAppearance,
+} from "./appearance.js";
+export type {
+  AppearanceAssignment,
+  AppearanceDefinition,
+  AppearanceLabel,
+  AppearanceVisual,
+  BoardAppearanceConfig,
+  BoardAppearanceTheme,
+  PieceAppearance,
+  PieceAppearanceResolver,
+  PieceAppearanceResolverContext,
+  PresentationEntityState,
+  SpaceAppearance,
+  SpaceAppearanceResolver,
+  SpaceAppearanceResolverContext,
+} from "./appearance.js";
 export { BoardRenderMode } from "./contracts.js";
 export type {
   BoardPresentationState,
