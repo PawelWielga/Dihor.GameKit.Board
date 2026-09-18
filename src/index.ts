@@ -29,3 +29,17 @@ export type {
   MovementPath,
   MovementResult,
 } from "./movement/index.js";
+
+export {
+  allowMovement,
+  combineMovementRules,
+  evaluateMovementRules,
+  rejectMovement,
+} from "./movement/index.js";
+export type {
+  MovementRule,
+  MovementRuleAllowed,
+  MovementRuleContext,
+  MovementRuleRejected,
+  MovementRuleResult,
+} from "./movement/index.js";
