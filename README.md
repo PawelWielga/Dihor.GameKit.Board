@@ -40,30 +40,35 @@ The board state and movement result are authoritative. Rendering only presents t
 
 A move across several spaces is represented as a path of visited spaces rather than only a start and end position. This allows games to react to events such as passing START, entering terrain, traps, portals or encounters.
 
-## Planned API direction
+## Movement API
+
+A board can be associated with a topology and then perform logical movement:
 
 ```ts
-const board = new Board({
-  topology: new SquareGrid(8, 8)
-});
+const topology = new LinearTopology(["start", "a", "b", "finish"]);
+const board = new Board({ topology });
 
-board.addPiece({
-  id: "player-1",
-  position: { x: 2, y: 3 }
-});
+for (const spaceId of topology.getSpaceIds()) {
+  board.addSpace({ id: spaceId });
+}
 
-const result = board.moveTo("player-1", { x: 5, y: 3 });
+board.addPiece({ id: "player-1" }, "start");
+
+const result = board.moveBy("player-1", 3);
 
 console.log(result.path);
+// ["start", "a", "b", "finish"]
 ```
 
-For track-style games:
+`moveTo()` finds a deterministic shortest path through the topology using
+breadth-first search. The search is bounded to spaces exposed by the topology
+and has O(V + E) complexity. `moveBy()` is available for ordered topologies
+such as `LinearTopology` and records every traversed space, including repeated
+spaces on looping tracks.
 
-```ts
-const result = board.moveBy("player-1", 4);
-```
-
-Exact API names may evolve while the first public preview is being implemented.
+A zero-distance move succeeds with a path containing only the current space.
+Invalid movement is rejected before board placement changes, so movement is
+atomic from the consumer's perspective.
 
 ## Architecture direction
 
