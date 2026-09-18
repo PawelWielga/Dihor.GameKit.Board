@@ -9,11 +9,12 @@ export type {
   SpaceId,
 } from "./core/index.js";
 
-export { GraphTopology, LinearTopology, TopologyError } from "./topology/index.js";
+export { GraphTopology, LinearTopology, SquareGridTopology, TopologyError } from "./topology/index.js";
 export type {
   GraphConnectionOptions,
   LinearDirection,
   LinearTopologyOptions,
+  SquareGridCoordinate,
   Topology,
   TopologyErrorCode,
 } from "./topology/index.js";
