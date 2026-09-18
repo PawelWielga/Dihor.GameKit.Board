@@ -182,6 +182,10 @@ h1 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.field-grid--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .field-grid--move {
   grid-template-columns: minmax(0, 1fr) auto;
   margin-top: 18px;
@@ -749,6 +753,7 @@ pre {
 
 @media (max-width: 460px) {
   .field-grid--two,
+  .field-grid--three,
   .field-grid--move {
     grid-template-columns: 1fr;
   }
