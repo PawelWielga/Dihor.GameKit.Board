@@ -361,6 +361,15 @@ function readRenderMode(): BoardRenderMode {
   throw new RangeError(`Unknown render mode '${value}'.`);
 }
 
+function readAppearanceTheme(): AppearanceThemeKind {
+  const value = appearanceThemeInput.value;
+  if (value === "midnight" || value === "arcade") {
+    return value;
+  }
+
+  throw new RangeError(`Unknown appearance theme '${value}'.`);
+}
+
 function syncPresentationControls(): void {
   full3dControls.hidden = selectedRenderMode !== BoardRenderMode.Full3D;
 }
@@ -573,10 +582,171 @@ function createPresentationLayout(): SpaceLayout {
   return createExplicitSpaceLayout(positions);
 }
 
+function createDemoAppearanceConfig(): BoardAppearanceConfig {
+  const snapshot = board.snapshot();
+  const spaceIds = topology.getSpaceIds();
+  const pieceIds = snapshot.pieces.map((piece) => piece.id);
+  const selectedPiece = selectedPieceId();
+  const highlightedSpaces = new Set(lastMovement?.path ?? []);
+  const occupiedSpaces = new Set(
+    snapshot.placements.map((placement) => placement.spaceId),
+  );
+  const blockedSpace = blockedSpaceInput.value.trim();
+  const selectedDestination = moveToSpaceInput.value;
+
+  const spaces = Object.fromEntries(
+    spaceIds.map((spaceId, index) => {
+      if (index === 0) {
+        return [
+          spaceId,
+          {
+            style: "accent",
+            appearance: {
+              label: { text: "START" },
+            },
+          },
+        ];
+      }
+
+      if (index === 1) {
+        return [
+          spaceId,
+          {
+            style: "secondary",
+            appearance: {
+              label: { text: spaceId },
+            },
+          },
+        ];
+      }
+
+      if (index === 2) {
+        return [
+          spaceId,
+          {
+            appearance: {
+              color: readAppearanceTheme() === "arcade"
+                ? "#224f9a"
+                : "#263f67",
+              icon: "•",
+            },
+          },
+        ];
+      }
+
+      return [spaceId, {}];
+    }),
+  );
+
+  const pieces = Object.fromEntries(
+    pieceIds.map((pieceId, index) => {
+      if (index === 0) {
+        return [
+          pieceId,
+          {
+            appearance: {
+              assetKey: "demo.custom-piece",
+              color: "#6ee7ff",
+              icon: "▲",
+              scale: 1.12,
+              rotation: 0.12,
+              label: { text: pieceId },
+            },
+          },
+        ];
+      }
+
+      if (index === 1) {
+        return [
+          pieceId,
+          {
+            appearance: {
+              assetKey: "demo.missing-piece",
+              material: "demo.glossy-material",
+              color: "#ffb347",
+              icon: "●",
+              scale: 0.98,
+              label: { text: pieceId },
+            },
+          },
+        ];
+      }
+
+      return [
+        pieceId,
+        {
+          appearance: {
+            color: index % 2 === 0 ? "#f472b6" : "#67e8f9",
+            icon: "◆",
+            label: { text: pieceId },
+          },
+        },
+      ];
+    }),
+  );
+
+  const spaceStates = Object.fromEntries(
+    spaceIds.map((spaceId) => [
+      spaceId,
+      {
+        occupied: occupiedSpaces.has(spaceId),
+        blocked: blockedSpace.length > 0 && blockedSpace === spaceId,
+        highlighted: highlightedSpaces.has(spaceId),
+        selected: selectedDestination === spaceId,
+      },
+    ]),
+  );
+
+  const pieceStates = Object.fromEntries(
+    pieceIds.map((pieceId) => [
+      pieceId,
+      {
+        selected: pieceId === selectedPiece,
+        active: pieceId === selectedPiece,
+        highlighted: pieceId === lastMovement?.pieceId,
+      },
+    ]),
+  );
+
+  return {
+    theme: DEMO_THEMES[readAppearanceTheme()],
+    spaces,
+    pieces,
+    spaceStates,
+    pieceStates,
+  };
+}
+
 function createPieceToken(pieceId: string, selected: boolean): HTMLElement {
   const token = document.createElement("span");
   token.className = selected ? "piece-token is-selected" : "piece-token";
-  token.textContent = pieceId;
+
+  const piece = board.snapshot().pieces.find((candidate) => candidate.id === pieceId) ??
+    { id: pieceId };
+  const appearance = resolvePieceAppearance(piece, activeAppearance);
+  const scale = typeof appearance.scale === "number"
+    ? appearance.scale
+    : appearance.scale?.x ?? 1;
+  const rotation = typeof appearance.rotation === "number"
+    ? appearance.rotation
+    : appearance.rotation?.z ?? appearance.rotation?.y ?? 0;
+  const offsetX = (appearance.offset?.x ?? 0) * 8;
+  const offsetY = -(appearance.offset?.z ?? 0) * 8;
+
+  if (appearance.color) {
+    token.style.background = appearance.color;
+  }
+  if (appearance.label?.color) {
+    token.style.color = appearance.label.color;
+  }
+  token.style.opacity = String(appearance.opacity ?? 1);
+  token.style.transform =
+    `translate(${offsetX}px, ${offsetY}px) scale(${scale}) rotate(${rotation}rad)`;
+
+  const label = appearance.label?.text ?? pieceId;
+  token.textContent = appearance.icon
+    ? `${appearance.icon} ${label}`
+    : label;
   return token;
 }
 
@@ -588,6 +758,18 @@ function createSpaceCard(spaceId: SpaceId): HTMLButtonElement {
   button.className = "space-card";
   button.dataset.space = spaceId;
   button.title = `Use '${spaceId}' as moveTo destination`;
+
+  const domainSpace = board.snapshot().spaces.find(
+    (candidate) => candidate.id === spaceId,
+  ) ?? { id: spaceId };
+  const appearance = resolveSpaceAppearance(domainSpace, activeAppearance);
+  if (appearance.color) {
+    button.style.background = appearance.color;
+  }
+  if (appearance.label?.color) {
+    button.style.color = appearance.label.color;
+  }
+  button.style.opacity = String(appearance.opacity ?? 1);
 
   if (occupants.length > 0) {
     button.classList.add("has-piece");
@@ -603,7 +785,13 @@ function createSpaceCard(spaceId: SpaceId): HTMLButtonElement {
 
   const id = document.createElement("span");
   id.className = "space-id";
-  id.textContent = spaceId;
+  const spaceLabel = appearance.label?.text ?? spaceId;
+  id.textContent = appearance.icon
+    ? `${appearance.icon} ${spaceLabel}`
+    : spaceLabel;
+  if (appearance.label?.color) {
+    id.style.color = appearance.label.color;
+  }
   button.append(id);
 
   const stack = document.createElement("span");
