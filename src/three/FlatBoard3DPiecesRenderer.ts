@@ -21,16 +21,15 @@ import {
   Vector3,
   WebGLRenderer,
 } from "three";
-import type {
-  BoardRenderInput,
-  BoardRenderer,
-  MovementResult,
-  PieceId,
-  SpaceId,
-} from "../index.js";
+import type { PieceId, SpaceId } from "../core/index.js";
+import type { MovementResult } from "../movement/index.js";
 import {
   BoardRenderMode,
   mapPiecesToPresentation,
+} from "../presentation/index.js";
+import type {
+  BoardRenderInput,
+  BoardRenderer,
 } from "../presentation/index.js";
 import {
   calculateHybridLayoutFrame,
