@@ -840,7 +840,7 @@ for (const tab of diagnosticTabs) {
   });
 }
 
-const resizeObserver = new ResizeObserver(() => {
+function rerenderHybridAfterResize(): void {
   if (!usingHybridRenderer || !hybridCanvas || animating) {
     return;
   }
@@ -855,13 +855,19 @@ const resizeObserver = new ResizeObserver(() => {
     console.warn("Hybrid renderer resize failed; rebuilding fallback.", error);
     renderBoard();
   }
-});
-resizeObserver.observe(boardStage);
+}
+
+const resizeObserver = typeof ResizeObserver === "undefined"
+  ? undefined
+  : new ResizeObserver(rerenderHybridAfterResize);
+resizeObserver?.observe(boardStage);
+window.addEventListener("resize", rerenderHybridAfterResize);
 
 window.addEventListener(
   "pagehide",
   () => {
-    resizeObserver.disconnect();
+    resizeObserver?.disconnect();
+    window.removeEventListener("resize", rerenderHybridAfterResize);
     hybridRenderer.dispose();
   },
   { once: true },
