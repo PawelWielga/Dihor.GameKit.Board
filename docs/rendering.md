@@ -83,13 +83,42 @@ They are deliberately not stored in:
 This guarantees that switching presentation mode or changing camera/lighting
 cannot change gameplay state.
 
-## Planned reference renderer
+## FlatBoard3DPieces reference renderer
 
-The preferred showcase renderer is `FlatBoard3DPieces`:
+The optional `@dihor/gamekit-board/three` entry point provides
+`FlatBoard3DPiecesRenderer`. Three.js is an optional peer dependency and does
+not leak into the domain/core entry points.
 
-1. render the board in a flat orthographic pass,
-2. render pieces in a separate 3D pass,
-3. compose both using the same `SpaceLayout`.
+```ts
+import { FlatBoard3DPiecesRenderer } from "@dihor/gamekit-board/three";
 
-A later `Full3D` renderer will reuse the same logical snapshot and layout
-boundary.
+const renderer = new FlatBoard3DPiecesRenderer({
+  shadows: true,
+  pixelRatio: 2,
+});
+
+renderer.render(canvas, {
+  snapshot: board.snapshot(),
+  layout,
+  movement: lastMovement,
+});
+```
+
+The renderer uses two explicit passes:
+
+1. a flat orthographic board pass,
+2. a perspective 3D piece/light/shadow pass.
+
+Each logical space is first projected to the board pass NDC coordinate. The 3D
+pass casts that same NDC coordinate onto its ground plane, so piece bases remain
+screen-aligned with the flat board even though the piece camera is angled.
+Viewport changes recompute both mappings from the same `SpaceLayout`.
+
+`animateMovement()` consumes the already-authorized `MovementResult.path`.
+It never calculates legality or mutates the board.
+
+If WebGL creation fails, consumers can catch the render failure and keep a
+low-cost 2D renderer. The bundled demo does exactly this and falls back to its
+HTML/SVG presentation.
+
+A later `Full3D` renderer reuses the same logical snapshot and layout boundary.
