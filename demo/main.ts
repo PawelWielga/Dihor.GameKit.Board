@@ -2,7 +2,10 @@ import {
   allowMovement,
   Board,
   BoardStateError,
+  createExplicitSpaceLayout,
+  createLinearSpaceLayout,
   createMovementEvents,
+  createSquareGridSpaceLayout,
   GraphTopology,
   LinearTopology,
   MovementError,
@@ -12,8 +15,10 @@ import {
   type MovementResult,
   type MovementRule,
   type SpaceId,
+  type SpaceLayout,
   type Topology,
 } from "@dihor/gamekit-board";
+import { FlatBoard3DPiecesRenderer } from "@dihor/gamekit-board/three";
 
 type TopologyKind = "linear" | "looping" | "grid" | "graph";
 type DiagnosticView = "state" | "events";
@@ -79,6 +84,12 @@ let diagnosticView: DiagnosticView = "state";
 let movementCounter = 0;
 let animating = false;
 let spaceElements = new Map<SpaceId, HTMLElement>();
+let hybridCanvas: HTMLCanvasElement | undefined;
+let usingHybridRenderer = false;
+
+const hybridRenderer = new FlatBoard3DPiecesRenderer({
+  pixelRatio: Math.min(window.devicePixelRatio || 1, 2),
+});
 
 const blockedDestinationRule: MovementRule = ({ toSpace }) => {
   const blockedSpaceId = blockedSpaceInput.value.trim();
@@ -290,6 +301,39 @@ function syncControls(preferredPieceId?: string): void {
   boardTitle.textContent = topologyLabel();
 }
 
+function createPresentationLayout(): SpaceLayout {
+  if (topologyKind === "grid") {
+    return createSquareGridSpaceLayout(topology as SquareGridTopology, {
+      cellSize: 1.2,
+    });
+  }
+
+  if (topologyKind === "linear") {
+    return createLinearSpaceLayout(topology as LinearTopology, {
+      spacing: 1.25,
+    });
+  }
+
+  const spaceIds = topology.getSpaceIds();
+  const radius = Math.max(2, spaceIds.length * 0.28);
+  const positions: Record<string, { x: number; z: number }> = {};
+
+  spaceIds.forEach((spaceId, index) => {
+    const angle = spaceIds.length === 1
+      ? 0
+      : (Math.PI * 2 * index) / spaceIds.length - Math.PI / 2;
+
+    positions[spaceId] = spaceIds.length === 1
+      ? { x: 0, z: 0 }
+      : {
+          x: Math.cos(angle) * radius,
+          z: Math.sin(angle) * radius,
+        };
+  });
+
+  return createExplicitSpaceLayout(positions);
+}
+
 function createPieceToken(pieceId: string, selected: boolean): HTMLElement {
   const token = document.createElement("span");
   token.className = selected ? "piece-token is-selected" : "piece-token";
@@ -415,9 +459,43 @@ function renderGraph(surface: HTMLElement): void {
   }
 }
 
+function tryRenderHybridBoard(): boolean {
+  const canvas = document.createElement("canvas");
+  canvas.className = "hybrid-canvas";
+  canvas.setAttribute("aria-label", "Flat board with 3D pieces");
+  boardStage.append(canvas);
+
+  try {
+    hybridRenderer.render(canvas, {
+      snapshot: board.snapshot(),
+      layout: createPresentationLayout(),
+      ...(lastMovement ? { movement: lastMovement } : {}),
+    });
+    hybridCanvas = canvas;
+    usingHybridRenderer = true;
+    return true;
+  } catch (error) {
+    hybridRenderer.disposeTarget(canvas);
+    canvas.remove();
+    hybridCanvas = undefined;
+    usingHybridRenderer = false;
+    console.warn(
+      "Hybrid WebGL renderer unavailable; using HTML/SVG fallback.",
+      error,
+    );
+    return false;
+  }
+}
+
 function renderBoard(): void {
   spaceElements = new Map();
   boardStage.replaceChildren();
+  hybridCanvas = undefined;
+  usingHybridRenderer = false;
+
+  if (tryRenderHybridBoard()) {
+    return;
+  }
 
   const surface = document.createElement("div");
   surface.className = "board-surface";
@@ -495,6 +573,10 @@ function currentStateDiagnostics(): unknown {
         board.getPiecesAt(spaceId).map((piece) => piece.id),
       ]),
     ),
+    renderer: {
+      preferred: "flat-board-3d-pieces",
+      active: usingHybridRenderer ? "flat-board-3d-pieces" : "html-svg-fallback",
+    },
     activeRules: {
       movement: [
         {
@@ -587,6 +669,29 @@ async function animateMovement(result: MovementResult): Promise<void> {
   setAnimating(true);
 
   try {
+    if (usingHybridRenderer && hybridCanvas) {
+      setStatus(
+        `Animating 3D piece along ${Math.max(0, result.path.length - 1)} authoritative step(s)`,
+        "busy",
+      );
+
+      await hybridRenderer.animateMovement(
+        hybridCanvas,
+        {
+          snapshot: board.snapshot(),
+          layout: createPresentationLayout(),
+          movement: result,
+        },
+        result,
+        {
+          durationPerStepMs: result.path.length > 12 ? 110 : 220,
+        },
+      );
+
+      setStatus(`Move complete: ${result.toSpaceId}`);
+      return;
+    }
+
     let previous: HTMLElement | undefined;
 
     for (let index = 0; index < result.path.length; index += 1) {
@@ -734,6 +839,33 @@ for (const tab of diagnosticTabs) {
     renderDiagnostics();
   });
 }
+
+const resizeObserver = new ResizeObserver(() => {
+  if (!usingHybridRenderer || !hybridCanvas || animating) {
+    return;
+  }
+
+  try {
+    hybridRenderer.render(hybridCanvas, {
+      snapshot: board.snapshot(),
+      layout: createPresentationLayout(),
+      ...(lastMovement ? { movement: lastMovement } : {}),
+    });
+  } catch (error) {
+    console.warn("Hybrid renderer resize failed; rebuilding fallback.", error);
+    renderBoard();
+  }
+});
+resizeObserver.observe(boardStage);
+
+window.addEventListener(
+  "pagehide",
+  () => {
+    resizeObserver.disconnect();
+    hybridRenderer.dispose();
+  },
+  { once: true },
+);
 
 updateTopologyOptions();
 rebuildBoard();
