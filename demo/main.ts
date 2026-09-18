@@ -896,6 +896,7 @@ function tryRenderHybridBoard(): boolean {
     hybridRenderer.render(canvas, {
       snapshot: board.snapshot(),
       layout: createPresentationLayout(),
+      appearance: activeAppearance,
       ...(lastMovement ? { movement: lastMovement } : {}),
     });
     hybridCanvas = canvas;
@@ -925,6 +926,7 @@ function tryRenderFull3DBoard(): boolean {
     full3dRenderer.render(canvas, {
       snapshot: board.snapshot(),
       layout: createPresentationLayout(),
+      appearance: activeAppearance,
       ...(lastMovement ? { movement: lastMovement } : {}),
     });
     full3dCanvas = canvas;
@@ -944,6 +946,7 @@ function tryRenderFull3DBoard(): boolean {
 }
 
 function renderBoard(): void {
+  activeAppearance = createDemoAppearanceConfig();
   spaceElements = new Map();
   boardStage.replaceChildren();
   hybridCanvas = undefined;
@@ -1041,6 +1044,33 @@ function currentStateDiagnostics(): unknown {
         board.getPiecesAt(spaceId).map((piece) => piece.id),
       ]),
     ),
+    appearance: {
+      theme: activeAppearance.theme?.name ?? null,
+      spaces: snapshot.spaces.map((space) => {
+        const appearance = resolveSpaceAppearance(space, activeAppearance);
+        return {
+          id: space.id,
+          color: appearance.color ?? null,
+          icon: appearance.icon ?? null,
+          texture: appearance.texture ?? null,
+          material: appearance.material ?? null,
+          assetKey: appearance.assetKey ?? null,
+          state: activeAppearance.spaceStates?.[space.id] ?? null,
+        };
+      }),
+      pieces: snapshot.pieces.map((piece) => {
+        const appearance = resolvePieceAppearance(piece, activeAppearance);
+        return {
+          id: piece.id,
+          color: appearance.color ?? null,
+          icon: appearance.icon ?? null,
+          texture: appearance.texture ?? null,
+          material: appearance.material ?? null,
+          assetKey: appearance.assetKey ?? null,
+          state: activeAppearance.pieceStates?.[piece.id] ?? null,
+        };
+      }),
+    },
     renderer: {
       preferred: BoardRenderMode.FlatBoard3DPieces,
       selected: selectedRenderMode,
@@ -1134,6 +1164,7 @@ function setAnimating(value: boolean): void {
   addPieceButton.disabled = value;
   blockedSpaceInput.disabled = value;
   singleOccupancyInput.disabled = value;
+  appearanceThemeInput.disabled = value;
   syncControls();
 }
 
@@ -1157,6 +1188,7 @@ async function animateMovement(result: MovementResult): Promise<void> {
           snapshot: board.snapshot(),
           layout: createPresentationLayout(),
           movement: result,
+          appearance: activeAppearance,
         },
         result,
         {
@@ -1180,6 +1212,7 @@ async function animateMovement(result: MovementResult): Promise<void> {
           snapshot: board.snapshot(),
           layout: createPresentationLayout(),
           movement: result,
+          appearance: activeAppearance,
         },
         result,
         {
@@ -1302,6 +1335,23 @@ renderModeInput.addEventListener("change", () => {
     renderBoard();
     renderDiagnostics();
     setStatus(`Render mode: ${selectedRenderMode}`);
+  } catch (error) {
+    showFailure(error);
+  }
+});
+
+appearanceThemeInput.addEventListener("change", () => {
+  try {
+    const snapshotBefore = board.snapshot();
+    activeAppearance = createDemoAppearanceConfig();
+    renderBoard();
+    renderDiagnostics();
+
+    if (JSON.stringify(board.snapshot()) !== JSON.stringify(snapshotBefore)) {
+      throw new Error("Appearance theme changed logical board state.");
+    }
+
+    setStatus(`Appearance theme: ${activeAppearance.theme?.name ?? "default"}`);
   } catch (error) {
     showFailure(error);
   }
@@ -1446,12 +1496,23 @@ syncPresentationControls();
 updateTopologyOptions();
 rebuildBoard();
 
-const initialSpaceId = topology.getSpaceIds()[0];
+const initialSpaceIds = topology.getSpaceIds();
+const initialSpaceId = initialSpaceIds[0];
 if (initialSpaceId) {
   board.addPiece({ id: "player-1" }, initialSpaceId);
-  pieceIdInput.value = "player-2";
+
+  const secondSpaceId = initialSpaceIds[1];
+  if (secondSpaceId) {
+    board.addPiece({ id: "player-2" }, secondSpaceId);
+  }
+
+  pieceIdInput.value = secondSpaceId ? "player-3" : "player-2";
   syncControls("player-1");
   renderBoard();
   renderDiagnostics();
-  setStatus(`Ready · player-1 starts on ${initialSpaceId}`);
+  setStatus(
+    secondSpaceId
+      ? `Ready · custom player-1 and fallback player-2 are visible`
+      : `Ready · player-1 starts on ${initialSpaceId}`,
+  );
 }
