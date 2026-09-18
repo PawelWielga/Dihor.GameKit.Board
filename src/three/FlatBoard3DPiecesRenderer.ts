@@ -121,6 +121,15 @@ implements BoardRenderer<HTMLCanvasElement> {
       return;
     }
 
+    const startSpaceId = path[0];
+    const start = startSpaceId === undefined
+      ? undefined
+      : context.groundBySpace.get(startSpaceId);
+    if (start) {
+      piece.position.copy(start);
+      this.#renderContext(context);
+    }
+
     for (let index = 0; index < path.length - 1; index += 1) {
       if (context.animationToken !== token) {
         return;
