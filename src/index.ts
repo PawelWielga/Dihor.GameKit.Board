@@ -1,5 +1,6 @@
 export { Board, BoardStateError } from "./core/index.js";
 export type {
+  BoardOptions,
   BoardSnapshot,
   BoardStateErrorCode,
   Piece,
@@ -14,7 +15,15 @@ export type {
   GraphConnectionOptions,
   LinearDirection,
   LinearTopologyOptions,
+  OrderedTopology,
   SquareGridCoordinate,
   Topology,
   TopologyErrorCode,
 } from "./topology/index.js";
+
+export { MovementError } from "./movement/index.js";
+export type {
+  MovementErrorCode,
+  MovementPath,
+  MovementResult,
+} from "./movement/index.js";
