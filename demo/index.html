@@ -183,6 +183,79 @@ e -> c</textarea>
               </span>
             </label>
           </section>
+
+          <section class="control-section">
+            <div class="section-heading">
+              <span class="section-index">05</span>
+              <div>
+                <h2>Presentation</h2>
+                <p>Switch renderers without rebuilding or mutating the logical board.</p>
+              </div>
+            </div>
+
+            <label class="field">
+              <span>Render mode</span>
+              <select id="render-mode">
+                <option value="top-down">TopDown · HTML/SVG</option>
+                <option value="flat-board-3d-pieces" selected>Flat board + 3D pieces</option>
+                <option value="full-3d">Full3D</option>
+              </select>
+            </label>
+
+            <div id="full3d-controls" class="config-panel" hidden>
+              <label class="field">
+                <span>Camera projection</span>
+                <select id="camera-projection">
+                  <option value="perspective" selected>Perspective</option>
+                  <option value="orthographic">Orthographic</option>
+                </select>
+              </label>
+
+              <p class="hint field--spaced">
+                Leave position/target blank for automatic framing. Position and target define camera
+                angle; zoom works in both projection modes.
+              </p>
+
+              <div class="field-grid field-grid--three field--spaced">
+                <label class="field">
+                  <span>Position X</span>
+                  <input id="camera-position-x" type="number" step="0.25" placeholder="auto" />
+                </label>
+                <label class="field">
+                  <span>Position Y</span>
+                  <input id="camera-position-y" type="number" step="0.25" placeholder="auto" />
+                </label>
+                <label class="field">
+                  <span>Position Z</span>
+                  <input id="camera-position-z" type="number" step="0.25" placeholder="auto" />
+                </label>
+              </div>
+
+              <div class="field-grid field-grid--three">
+                <label class="field">
+                  <span>Target X</span>
+                  <input id="camera-target-x" type="number" step="0.25" placeholder="auto" />
+                </label>
+                <label class="field">
+                  <span>Target Y</span>
+                  <input id="camera-target-y" type="number" step="0.25" placeholder="auto" />
+                </label>
+                <label class="field">
+                  <span>Target Z</span>
+                  <input id="camera-target-z" type="number" step="0.25" placeholder="auto" />
+                </label>
+              </div>
+
+              <label class="field field--spaced">
+                <span>Camera zoom</span>
+                <input id="camera-zoom" type="number" min="0.1" step="0.1" value="1" />
+              </label>
+
+              <button id="reset-camera" class="button field--spaced" type="button">
+                Reset camera to auto
+              </button>
+            </div>
+          </section>
         </aside>
 
         <section class="preview-column">
