@@ -70,6 +70,30 @@ A zero-distance move succeeds with a path containing only the current space.
 Invalid movement is rejected before board placement changes, so movement is
 atomic from the consumer's perspective.
 
+## Networking boundary
+
+Board movement events are plain, versioned JSON-friendly objects. After the host
+accepts a move, it can turn the authoritative `MovementResult` into an ordered
+event stream:
+
+```ts
+const result = board.moveBy("player-1", 3);
+const events = createMovementEvents(result, {
+  movementId: "turn-42-player-1",
+});
+```
+
+The stream contains `movement.started`, one `movement.space-entered` event
+for every space entered after the origin, and `movement.completed`. Events
+carry schema/version fields plus authoritative piece position state; start and
+completion also carry the complete movement path.
+
+`Dihor.GameKit.Board` does not choose or depend on a transport.
+[Dihor.GameKit.Networking](https://github.com/PawelWielga/Dihor.GameKit.Networking)
+or a game-specific networking layer is responsible for host/client delivery,
+ordering, reliability and reconnect/replay behavior. Renderers should animate
+from the authoritative path/state rather than become a source of game state.
+
 ## Architecture direction
 
 ```text
