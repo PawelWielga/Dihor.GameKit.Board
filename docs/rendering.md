@@ -67,6 +67,89 @@ whether the move is legal.
 an HTML element, canvas, Three.js scene, Flutter bridge or any other target
 without adding that technology to the domain core.
 
+## External appearance configuration
+
+Space and piece visuals are configured outside the authoritative board. A
+`BoardAppearanceConfig` can provide global defaults, reusable named styles,
+per-entity overrides, resolver functions and temporary presentation state.
+
+```ts
+const appearance = {
+  theme: {
+    name: "neon",
+    spaceDefault: { color: "#202534", opacity: 1 },
+    pieceDefault: { color: "#7c9cff", scale: 1 },
+    spaceStyles: {
+      reward: {
+        color: "#16c784",
+        icon: "star",
+      },
+    },
+  },
+  spaces: {
+    bonus: {
+      style: "reward",
+      appearance: {
+        label: { text: "BONUS" },
+      },
+    },
+  },
+  pieces: {
+    "player-1": {
+      appearance: {
+        color: "#ff5c7a",
+        assetKey: "piece.player.red",
+      },
+    },
+  },
+  pieceStates: {
+    "player-1": {
+      active: true,
+      selected: true,
+    },
+  },
+} satisfies BoardAppearanceConfig;
+
+renderer.render(canvas, {
+  snapshot: board.snapshot(),
+  layout,
+  appearance,
+});
+```
+
+Resolver functions can select appearance from entity data without putting
+renderer details into `Space`, `Piece` or `Board`:
+
+```ts
+const appearance: BoardAppearanceConfig<{ terrain: string }> = {
+  resolveSpace: ({ space }) =>
+    space.data?.terrain === "water"
+      ? { color: "#2f80ed", texture: "water" }
+      : undefined,
+};
+```
+
+Appearance resolution is deterministic. Values are merged in this order:
+
+1. built-in fallback,
+2. theme default,
+3. static entity named style,
+4. static entity appearance override,
+5. resolver-selected named style,
+6. resolver appearance override,
+7. active presentation-state variants.
+
+When several presentation states are active, variant precedence is
+`occupied < reachable < blocked < highlighted < selected < active`.
+
+Changing `BoardAppearanceConfig`, replacing the theme or toggling temporary
+presentation state never mutates topology, occupancy, movement state or entity
+data. Unknown named styles are ignored and built-in defaults remain available.
+
+Portable descriptors intentionally use strings and renderer-neutral transforms.
+`assetKey`, `texture` and `icon` are logical references; concrete asset
+loading and renderer-specific resources belong to renderer adapters.
+
 ## Presentation-only state
 
 Camera position, target, zoom, projection, viewport, lighting, shadows,
