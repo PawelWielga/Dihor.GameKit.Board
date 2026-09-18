@@ -150,6 +150,92 @@ Portable descriptors intentionally use strings and renderer-neutral transforms.
 `assetKey`, `texture` and `icon` are logical references; concrete asset
 loading and renderer-specific resources belong to renderer adapters.
 
+## Renderer asset providers
+
+Portable appearance descriptors use logical keys. Renderer adapters resolve
+those keys through a `RendererAssetProvider<TResource>` instead of storing
+engine objects in `Board`, `Space` or `Piece`.
+
+`RendererAssetCache` defines the loading lifecycle shared by renderer
+adapters:
+
+- the first request starts the provider load,
+- repeated requests for the same kind/key reuse one cached load/result,
+- a synchronous placeholder can be returned while an async load is pending,
+- missing or failed loads can resolve to a configured fallback,
+- `peek()` exposes the current loading/ready/fallback/error state,
+- `dispose()` waits for active loads, disposes owned cached resources once and
+  then disposes the provider.
+
+By default the cache identity is `kind:key`. A provider may use an explicit
+`cacheKey` when several logical entities should share one renderer resource.
+
+```ts
+const assets = new RendererAssetCache(provider, {
+  placeholder: () => placeholderVisual,
+  fallback: (request) => ({
+    resource: createFallbackVisual(request),
+    dispose: () => disposeFallbackVisual(request),
+  }),
+  onSettled: () => requestRender(),
+});
+
+const handle = assets.request({
+  key: "piece.knight",
+  kind: RendererAssetKind.Model,
+  entity: "piece",
+});
+
+// Render immediately with handle.current.resource when present.
+// Re-render when handle.ready settles.
+```
+
+The cache owns only resources returned through
+`RendererAssetLoadResult.dispose`. Placeholder ownership remains with the
+consumer, which avoids accidentally disposing a shared global placeholder.
+
+### Three.js assets
+
+The optional `@dihor/gamekit-board/three` entry point defines
+`ThreeBoardAssetProvider`. It can return textures, materials, model factories,
+piece factories or space factories without exposing Three.js from the package
+root.
+
+For example, an application can load a GLB/glTF model however it prefers and
+publish a factory under the same logical key used by `PieceAppearance.assetKey`:
+
+```ts
+import type {
+  ThreeBoardAssetProvider,
+  ThreeBoardAsset,
+} from "@dihor/gamekit-board/three";
+
+const provider: ThreeBoardAssetProvider = {
+  async load(request) {
+    if (request.key !== "piece.knight") {
+      return undefined;
+    }
+
+    const model = await loadKnightModel();
+
+    const resource: ThreeBoardAsset = {
+      type: "piece-visual",
+      create: () => model.clone(true),
+    };
+
+    return {
+      resource,
+      dispose: () => disposeModelResources(model),
+    };
+  },
+};
+```
+
+A space visual can be supplied the same way with `type: "space-visual"`, while
+texture and material assets use `type: "texture"` and `type: "material"`.
+Renderer adapters remain responsible for applying those resources and for
+disposing per-instance scene objects they create.
+
 ## Presentation-only state
 
 Camera position, target, zoom, projection, viewport, lighting, shadows,
