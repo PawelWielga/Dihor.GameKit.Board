@@ -4,6 +4,7 @@ import type {
   SpaceId,
 } from "../core/index.js";
 import type { MovementResult } from "../movement/index.js";
+import type { BoardAppearanceConfig } from "./appearance.js";
 
 export const BoardRenderMode = Object.freeze({
   TopDown: "top-down",
@@ -44,6 +45,7 @@ export interface BoardRenderInput<
   readonly snapshot: BoardSnapshot<TSpaceData, TPieceData>;
   readonly layout: SpaceLayout;
   readonly movement?: MovementResult;
+  readonly appearance?: BoardAppearanceConfig<TSpaceData, TPieceData>;
 }
 
 export interface BoardPresentationState<
