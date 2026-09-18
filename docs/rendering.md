@@ -121,4 +121,45 @@ If WebGL creation fails, consumers can catch the render failure and keep a
 low-cost 2D renderer. The bundled demo does exactly this and falls back to its
 HTML/SVG presentation.
 
-A later `Full3D` renderer reuses the same logical snapshot and layout boundary.
+## Full3D reference renderer
+
+The same optional Three.js entry point also exports `Full3DRenderer`. It renders
+board spaces and pieces in one real 3D scene while consuming exactly the same
+`BoardRenderInput` and `SpaceLayout`.
+
+```ts
+import { Full3DRenderer } from "@dihor/gamekit-board/three";
+
+const renderer = new Full3DRenderer({
+  camera: {
+    projection: "perspective",
+    position: { x: 6, y: 8, z: 9 },
+    target: { x: 0, y: 0, z: 0 },
+    zoom: 1.1,
+  },
+});
+
+renderer.render(canvas, {
+  snapshot: board.snapshot(),
+  layout,
+  movement: lastMovement,
+});
+```
+
+Camera `position` and `target` define angle/tilt. Both perspective and
+orthographic projections are supported, along with zoom. Omitting position or
+target enables automatic framing from the current presentation layout.
+
+The renderer's `setCameraOptions()` changes presentation only. It does not have
+a `Board` reference and cannot move pieces, mutate topology or validate moves.
+
+## Demo mode switching
+
+The demo exposes all three render modes:
+
+- `TopDown` uses the HTML/SVG renderer,
+- `FlatBoard3DPieces` is the preferred/default showcase,
+- `Full3D` uses the single-scene 3D renderer.
+
+Changing this selector calls only the presentation path. The existing board
+instance, topology, placements and latest movement result are retained.
