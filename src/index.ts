@@ -3,6 +3,8 @@ export type {
   BoardOptions,
   BoardSnapshot,
   BoardStateErrorCode,
+  OccupancyPolicy,
+  OccupancyPolicyContext,
   Piece,
   PieceId,
   PiecePlacement,
