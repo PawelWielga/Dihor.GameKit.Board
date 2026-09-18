@@ -1,11 +1,28 @@
+import {
+  calculateMoveByPath,
+  calculateMoveToPath,
+  MovementError,
+} from "../movement/index.js";
+import type { MovementPath, MovementResult } from "../movement/index.js";
+import type { Topology } from "../topology/index.js";
 import { BoardStateError } from "./errors.js";
 import type { PieceId, SpaceId } from "./ids.js";
 import type { BoardSnapshot, Piece, PiecePlacement, Space } from "./models.js";
+
+export interface BoardOptions {
+  readonly topology?: Topology;
+}
 
 export class Board<TSpaceData = unknown, TPieceData = unknown> {
   readonly #spaces = new Map<SpaceId, Space<TSpaceData>>();
   readonly #pieces = new Map<PieceId, Piece<TPieceData>>();
   readonly #placements = new Map<PieceId, SpaceId>();
+
+  public readonly topology?: Topology;
+
+  public constructor(options: BoardOptions = {}) {
+    this.topology = options.topology;
+  }
 
   public addSpace(space: Space<TSpaceData>): Space<TSpaceData> {
     if (this.#spaces.has(space.id)) {
@@ -90,6 +107,30 @@ export class Board<TSpaceData = unknown, TPieceData = unknown> {
     return Object.freeze({ pieceId, spaceId });
   }
 
+  public moveTo(pieceId: PieceId, toSpaceId: SpaceId): MovementResult {
+    const fromSpaceId = this.getPlacement(pieceId).spaceId;
+    this.#requireSpace(toSpaceId);
+
+    const path = calculateMoveToPath(
+      this.#requireMovementTopology(),
+      fromSpaceId,
+      toSpaceId,
+    );
+
+    return this.#applyMovement(pieceId, fromSpaceId, path);
+  }
+
+  public moveBy(pieceId: PieceId, distance: number): MovementResult {
+    const fromSpaceId = this.getPlacement(pieceId).spaceId;
+    const path = calculateMoveByPath(
+      this.#requireMovementTopology(),
+      fromSpaceId,
+      distance,
+    );
+
+    return this.#applyMovement(pieceId, fromSpaceId, path);
+  }
+
   public getSpaces(): readonly Space<TSpaceData>[] {
     return [...this.#spaces.values()];
   }
@@ -104,6 +145,48 @@ export class Board<TSpaceData = unknown, TPieceData = unknown> {
       pieces: this.getPieces(),
       placements: [...this.#placements].map(([pieceId, spaceId]) => ({ pieceId, spaceId })),
     };
+  }
+
+  #applyMovement(
+    pieceId: PieceId,
+    fromSpaceId: SpaceId,
+    path: MovementPath,
+  ): MovementResult {
+    if (path.length === 0 || path[0] !== fromSpaceId) {
+      throw new MovementError(
+        "INVALID_TOPOLOGY",
+        "Movement path must start at the piece's current space.",
+      );
+    }
+
+    for (const spaceId of path) {
+      this.#requireSpace(spaceId);
+    }
+
+    const toSpaceId = path[path.length - 1];
+    if (toSpaceId === undefined) {
+      throw new MovementError("INVALID_TOPOLOGY", "Movement path cannot be empty.");
+    }
+
+    this.#placements.set(pieceId, toSpaceId);
+
+    return Object.freeze({
+      pieceId,
+      fromSpaceId,
+      toSpaceId,
+      path,
+    });
+  }
+
+  #requireMovementTopology(): Topology {
+    if (this.topology === undefined) {
+      throw new MovementError(
+        "TOPOLOGY_REQUIRED",
+        "Board movement requires a topology.",
+      );
+    }
+
+    return this.topology;
   }
 
   #requireSpace(spaceId: SpaceId): Space<TSpaceData> {
