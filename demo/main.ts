@@ -70,8 +70,8 @@ const diagnosticTabs = [
 ];
 
 let topologyKind: TopologyKind = "linear";
-let topology: Topology;
-let board: Board;
+let topology!: Topology;
+let board!: Board;
 let lastMovement: MovementResult | undefined;
 let lastEvents: readonly MovementEvent[] = [];
 let lastFailure: DemoFailure | undefined;
