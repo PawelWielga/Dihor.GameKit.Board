@@ -81,8 +81,13 @@ export function resolveFull3DCameraOptions(
     throw new RangeError("far must be greater than near.");
   }
 
+  const projection = options.projection ?? "perspective";
+  if (projection !== "perspective" && projection !== "orthographic") {
+    throw new RangeError(`Unsupported Full3D projection '${String(projection)}'.`);
+  }
+
   return Object.freeze({
-    projection: options.projection ?? "perspective",
+    projection,
     position,
     target,
     zoom,
