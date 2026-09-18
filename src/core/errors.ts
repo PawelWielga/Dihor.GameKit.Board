@@ -3,7 +3,8 @@ export type BoardStateErrorCode =
   | "DUPLICATE_PIECE"
   | "UNKNOWN_SPACE"
   | "UNKNOWN_PIECE"
-  | "SPACE_OCCUPIED";
+  | "SPACE_OCCUPIED"
+  | "OCCUPANCY_REJECTED";
 
 export class BoardStateError extends Error {
   public readonly code: BoardStateErrorCode;
