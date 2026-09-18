@@ -582,13 +582,54 @@ function tryRenderHybridBoard(): boolean {
   }
 }
 
+function tryRenderFull3DBoard(): boolean {
+  const canvas = document.createElement("canvas");
+  canvas.className = "hybrid-canvas";
+  canvas.setAttribute("aria-label", "Full 3D board and pieces");
+  boardStage.append(canvas);
+
+  try {
+    full3dRenderer.setCameraOptions(readFull3DCameraOptions());
+    full3dRenderer.render(canvas, {
+      snapshot: board.snapshot(),
+      layout: createPresentationLayout(),
+      ...(lastMovement ? { movement: lastMovement } : {}),
+    });
+    full3dCanvas = canvas;
+    usingFull3DRenderer = true;
+    return true;
+  } catch (error) {
+    full3dRenderer.disposeTarget(canvas);
+    canvas.remove();
+    full3dCanvas = undefined;
+    usingFull3DRenderer = false;
+    console.warn(
+      "Full3D WebGL renderer unavailable; using TopDown fallback.",
+      error,
+    );
+    return false;
+  }
+}
+
 function renderBoard(): void {
   spaceElements = new Map();
   boardStage.replaceChildren();
   hybridCanvas = undefined;
+  full3dCanvas = undefined;
   usingHybridRenderer = false;
+  usingFull3DRenderer = false;
 
-  if (tryRenderHybridBoard()) {
+  if (
+    selectedRenderMode === BoardRenderMode.FlatBoard3DPieces &&
+    tryRenderHybridBoard()
+  ) {
+    return;
+  }
+
+  if (
+    selectedRenderMode === BoardRenderMode.Full3D &&
+    tryRenderFull3DBoard()
+  ) {
     return;
   }
 
@@ -669,8 +710,16 @@ function currentStateDiagnostics(): unknown {
       ]),
     ),
     renderer: {
-      preferred: "flat-board-3d-pieces",
-      active: usingHybridRenderer ? "flat-board-3d-pieces" : "html-svg-fallback",
+      preferred: BoardRenderMode.FlatBoard3DPieces,
+      selected: selectedRenderMode,
+      active: usingFull3DRenderer
+        ? BoardRenderMode.Full3D
+        : usingHybridRenderer
+          ? BoardRenderMode.FlatBoard3DPieces
+          : BoardRenderMode.TopDown,
+      camera: selectedRenderMode === BoardRenderMode.Full3D
+        ? full3dRenderer.getCameraOptions()
+        : null,
     },
     activeRules: {
       movement: [
@@ -764,6 +813,29 @@ async function animateMovement(result: MovementResult): Promise<void> {
   setAnimating(true);
 
   try {
+    if (usingFull3DRenderer && full3dCanvas) {
+      setStatus(
+        `Animating Full3D piece along ${Math.max(0, result.path.length - 1)} authoritative step(s)`,
+        "busy",
+      );
+
+      await full3dRenderer.animateMovement(
+        full3dCanvas,
+        {
+          snapshot: board.snapshot(),
+          layout: createPresentationLayout(),
+          movement: result,
+        },
+        result,
+        {
+          durationPerStepMs: result.path.length > 12 ? 110 : 220,
+        },
+      );
+
+      setStatus(`Move complete: ${result.toSpaceId}`);
+      return;
+    }
+
     if (usingHybridRenderer && hybridCanvas) {
       setStatus(
         `Animating 3D piece along ${Math.max(0, result.path.length - 1)} authoritative step(s)`,
@@ -891,6 +963,62 @@ function updateTopologyOptions(): void {
   graphOptions.hidden = kind !== "graph";
 }
 
+renderModeInput.addEventListener("change", () => {
+  try {
+    selectedRenderMode = readRenderMode();
+    syncPresentationControls();
+    renderBoard();
+    renderDiagnostics();
+    setStatus(`Render mode: ${selectedRenderMode}`);
+  } catch (error) {
+    showFailure(error);
+  }
+});
+
+for (const input of [
+  cameraProjectionInput,
+  cameraPositionX,
+  cameraPositionY,
+  cameraPositionZ,
+  cameraTargetX,
+  cameraTargetY,
+  cameraTargetZ,
+  cameraZoomInput,
+]) {
+  input.addEventListener("change", () => {
+    if (selectedRenderMode !== BoardRenderMode.Full3D || animating) {
+      return;
+    }
+
+    try {
+      full3dRenderer.setCameraOptions(readFull3DCameraOptions());
+      renderBoard();
+      renderDiagnostics();
+      setStatus("Full3D camera updated");
+    } catch (error) {
+      showFailure(error);
+    }
+  });
+}
+
+resetCameraButton.addEventListener("click", () => {
+  cameraProjectionInput.value = "perspective";
+  cameraPositionX.value = "";
+  cameraPositionY.value = "";
+  cameraPositionZ.value = "";
+  cameraTargetX.value = "";
+  cameraTargetY.value = "";
+  cameraTargetZ.value = "";
+  cameraZoomInput.value = "1";
+
+  if (selectedRenderMode === BoardRenderMode.Full3D) {
+    full3dRenderer.setCameraOptions(readFull3DCameraOptions());
+    renderBoard();
+    renderDiagnostics();
+    setStatus("Full3D camera reset to auto");
+  }
+});
+
 topologyKindInput.addEventListener("change", updateTopologyOptions);
 rebuildButton.addEventListener("click", rebuildBoard);
 addPieceButton.addEventListener("click", addPiece);
@@ -935,39 +1063,54 @@ for (const tab of diagnosticTabs) {
   });
 }
 
-function rerenderHybridAfterResize(): void {
-  if (!usingHybridRenderer || !hybridCanvas || animating) {
+function rerenderActiveRendererAfterResize(): void {
+  if (animating) {
     return;
   }
 
   try {
-    hybridRenderer.render(hybridCanvas, {
-      snapshot: board.snapshot(),
-      layout: createPresentationLayout(),
-      ...(lastMovement ? { movement: lastMovement } : {}),
-    });
+    if (usingFull3DRenderer && full3dCanvas) {
+      full3dRenderer.setCameraOptions(readFull3DCameraOptions());
+      full3dRenderer.render(full3dCanvas, {
+        snapshot: board.snapshot(),
+        layout: createPresentationLayout(),
+        ...(lastMovement ? { movement: lastMovement } : {}),
+      });
+      return;
+    }
+
+    if (usingHybridRenderer && hybridCanvas) {
+      hybridRenderer.render(hybridCanvas, {
+        snapshot: board.snapshot(),
+        layout: createPresentationLayout(),
+        ...(lastMovement ? { movement: lastMovement } : {}),
+      });
+    }
   } catch (error) {
-    console.warn("Hybrid renderer resize failed; rebuilding fallback.", error);
+    console.warn("Active WebGL renderer resize failed; rebuilding fallback.", error);
     renderBoard();
   }
 }
 
 const resizeObserver = typeof ResizeObserver === "undefined"
   ? undefined
-  : new ResizeObserver(rerenderHybridAfterResize);
+  : new ResizeObserver(rerenderActiveRendererAfterResize);
 resizeObserver?.observe(boardStage);
-window.addEventListener("resize", rerenderHybridAfterResize);
+window.addEventListener("resize", rerenderActiveRendererAfterResize);
 
 window.addEventListener(
   "pagehide",
   () => {
     resizeObserver?.disconnect();
-    window.removeEventListener("resize", rerenderHybridAfterResize);
+    window.removeEventListener("resize", rerenderActiveRendererAfterResize);
     hybridRenderer.dispose();
+    full3dRenderer.dispose();
   },
   { once: true },
 );
 
+selectedRenderMode = readRenderMode();
+syncPresentationControls();
 updateTopologyOptions();
 rebuildBoard();
 
