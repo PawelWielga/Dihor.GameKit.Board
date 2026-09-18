@@ -7,6 +7,13 @@ export interface SquareGridCoordinate {
   readonly y: number;
 }
 
+const ORTHOGONAL_OFFSETS: readonly SquareGridCoordinate[] = Object.freeze([
+  Object.freeze({ x: 0, y: -1 }),
+  Object.freeze({ x: 1, y: 0 }),
+  Object.freeze({ x: 0, y: 1 }),
+  Object.freeze({ x: -1, y: 0 }),
+]);
+
 /**
  * Rectangular square-grid topology using zero-based coordinates.
  *
@@ -76,14 +83,7 @@ export class SquareGridTopology implements Topology {
     const { x, y } = this.getCoordinates(spaceId);
     const neighbors: SpaceId[] = [];
 
-    const offsets: readonly SquareGridCoordinate[] = [
-      { x: 0, y: -1 },
-      { x: 1, y: 0 },
-      { x: 0, y: 1 },
-      { x: -1, y: 0 },
-    ];
-
-    for (const offset of offsets) {
+    for (const offset of ORTHOGONAL_OFFSETS) {
       const neighborX = x + offset.x;
       const neighborY = y + offset.y;
 
