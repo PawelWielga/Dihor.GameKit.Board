@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "baseUrl": ".",
+    "paths": {
+      "@dihor/gamekit-board": ["./src/index.ts"]
+    },
+    "noEmit": true
+  },
+  "include": ["demo/**/*.ts"]
+}
