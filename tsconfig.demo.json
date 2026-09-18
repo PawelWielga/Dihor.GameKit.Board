@@ -9,6 +9,9 @@
     "paths": {
       "@dihor/gamekit-board": [
         "./src/index.ts"
+      ],
+      "@dihor/gamekit-board/three": [
+        "./src/three/index.ts"
       ]
     },
     "noEmit": true
