@@ -1,9 +1,14 @@
 import {
   calculateMoveByPath,
   calculateMoveToPath,
+  evaluateMovementRules,
   MovementError,
 } from "../movement/index.js";
-import type { MovementPath, MovementResult } from "../movement/index.js";
+import type {
+  MovementPath,
+  MovementResult,
+  MovementRule,
+} from "../movement/index.js";
 import type { Topology } from "../topology/index.js";
 import { BoardStateError } from "./errors.js";
 import type { PieceId, SpaceId } from "./ids.js";
@@ -16,6 +21,7 @@ export interface BoardOptions<
 > {
   readonly topology?: Topology;
   readonly occupancyPolicy?: OccupancyPolicy<TSpaceData, TPieceData>;
+  readonly movementRules?: readonly MovementRule<TSpaceData, TPieceData>[];
 }
 
 export class Board<TSpaceData = unknown, TPieceData = unknown> {
@@ -24,12 +30,14 @@ export class Board<TSpaceData = unknown, TPieceData = unknown> {
   readonly #placements = new Map<PieceId, SpaceId>();
   readonly #pieceIdsBySpace = new Map<SpaceId, Set<PieceId>>();
   readonly #occupancyPolicy?: OccupancyPolicy<TSpaceData, TPieceData>;
+  readonly #movementRules: readonly MovementRule<TSpaceData, TPieceData>[];
 
   public readonly topology?: Topology;
 
   public constructor(options: BoardOptions<TSpaceData, TPieceData> = {}) {
     this.topology = options.topology;
     this.#occupancyPolicy = options.occupancyPolicy;
+    this.#movementRules = Object.freeze([...(options.movementRules ?? [])]);
   }
 
   public addSpace(space: Space<TSpaceData>): Space<TSpaceData> {
@@ -203,6 +211,7 @@ export class Board<TSpaceData = unknown, TPieceData = unknown> {
     }
 
     const piece = this.#requirePiece(pieceId);
+    this.#assertMovementRules(piece, fromSpaceId, toSpaceId, path);
     this.#assertOccupancyAllowed(piece, fromSpaceId, toSpaceId);
 
     if (toSpaceId !== fromSpaceId) {
@@ -217,6 +226,42 @@ export class Board<TSpaceData = unknown, TPieceData = unknown> {
       toSpaceId,
       path,
     });
+  }
+
+  #assertMovementRules(
+    piece: Piece<TPieceData>,
+    fromSpaceId: SpaceId,
+    toSpaceId: SpaceId,
+    path: MovementPath,
+  ): void {
+    if (this.#movementRules.length === 0) {
+      return;
+    }
+
+    const destinationOccupants = this.getPiecesAt(toSpaceId).filter(
+      (occupant) => occupant.id !== piece.id,
+    );
+    const result = evaluateMovementRules(
+      this.#movementRules,
+      Object.freeze({
+        piece,
+        fromSpace: this.#requireSpace(fromSpaceId),
+        toSpace: this.#requireSpace(toSpaceId),
+        path,
+        visitedSpaces: Object.freeze(
+          path.map((spaceId) => this.#requireSpace(spaceId)),
+        ),
+        destinationOccupants: Object.freeze(destinationOccupants),
+      }),
+    );
+
+    if (!result.allowed) {
+      throw new MovementError(
+        "RULE_REJECTED",
+        result.message ?? `Movement rejected by rule reason '${result.reason}'.`,
+        result.reason,
+      );
+    }
   }
 
   #assertOccupancyAllowed(
