@@ -11,7 +11,11 @@ import {
   LinearTopology,
   MovementError,
   rejectMovement,
+  resolvePieceAppearance,
+  resolveSpaceAppearance,
   SquareGridTopology,
+  type BoardAppearanceConfig,
+  type BoardAppearanceTheme,
   type MovementEvent,
   type MovementResult,
   type MovementRule,
@@ -23,10 +27,19 @@ import {
   FlatBoard3DPiecesRenderer,
   Full3DRenderer,
   type Full3DCameraOptions,
+  type ThreeBoardAssetProvider,
 } from "@dihor/gamekit-board/three";
+import {
+  ConeGeometry,
+  CylinderGeometry,
+  Group,
+  Mesh,
+  MeshStandardMaterial,
+} from "three";
 
 type TopologyKind = "linear" | "looping" | "grid" | "graph";
 type DiagnosticView = "state" | "events";
+type AppearanceThemeKind = "midnight" | "arcade";
 
 interface DemoFailure {
   readonly code?: string;
@@ -70,6 +83,7 @@ const blockedSpaceInput = requireElement<HTMLInputElement>("#blocked-space");
 const singleOccupancyInput = requireElement<HTMLInputElement>("#single-occupancy");
 
 const renderModeInput = requireElement<HTMLSelectElement>("#render-mode");
+const appearanceThemeInput = requireElement<HTMLSelectElement>("#appearance-theme");
 const full3dControls = requireElement<HTMLElement>("#full3d-controls");
 const cameraProjectionInput = requireElement<HTMLSelectElement>("#camera-projection");
 const cameraPositionX = requireElement<HTMLInputElement>("#camera-position-x");
@@ -106,12 +120,142 @@ let full3dCanvas: HTMLCanvasElement | undefined;
 let usingHybridRenderer = false;
 let usingFull3DRenderer = false;
 let selectedRenderMode: BoardRenderMode = BoardRenderMode.FlatBoard3DPieces;
+let activeAppearance: BoardAppearanceConfig = {};
+
+const DEMO_THEMES: Readonly<Record<AppearanceThemeKind, BoardAppearanceTheme>> = {
+  midnight: {
+    name: "Midnight",
+    spaceDefault: {
+      color: "#172235",
+      opacity: 1,
+      variants: {
+        occupied: { color: "#243653" },
+        blocked: { color: "#5f2832" },
+        highlighted: { color: "#3f3b85" },
+        selected: { color: "#315a73" },
+      },
+    },
+    pieceDefault: {
+      color: "#5e7fe8",
+      variants: {
+        highlighted: { color: "#a98cff" },
+        selected: { scale: 1.12 },
+        active: { color: "#7c9cff", scale: 1.16 },
+      },
+    },
+    spaceStyles: {
+      accent: {
+        color: "#165d63",
+        icon: "★",
+        label: { color: "#ecfeff" },
+      },
+      secondary: {
+        color: "#5b3d22",
+        icon: "◆",
+        label: { color: "#fff7ed" },
+      },
+    },
+  },
+  arcade: {
+    name: "Arcade",
+    spaceDefault: {
+      color: "#54216f",
+      opacity: 1,
+      variants: {
+        occupied: { color: "#7b2f91" },
+        blocked: { color: "#8d2739" },
+        highlighted: { color: "#9a4b10" },
+        selected: { color: "#116466" },
+      },
+    },
+    pieceDefault: {
+      color: "#20c997",
+      variants: {
+        highlighted: { color: "#f59f00" },
+        selected: { scale: 1.18 },
+        active: { color: "#ff6b9a", scale: 1.2 },
+      },
+    },
+    spaceStyles: {
+      accent: {
+        color: "#007f73",
+        icon: "✦",
+        label: { color: "#e6fffb" },
+      },
+      secondary: {
+        color: "#ad5f00",
+        icon: "⬢",
+        label: { color: "#fff4e6" },
+      },
+    },
+  },
+};
+
+function createDemoCustomPiece(): Group {
+  const group = new Group();
+  const material = new MeshStandardMaterial({
+    color: "#6ee7ff",
+    roughness: 0.28,
+    metalness: 0.34,
+  });
+
+  const base = new Mesh(
+    new CylinderGeometry(0.24, 0.3, 0.2, 24),
+    material,
+  );
+  base.position.y = 0.1;
+  group.add(base);
+
+  const body = new Mesh(
+    new ConeGeometry(0.26, 0.72, 24),
+    material,
+  );
+  body.position.y = 0.54;
+  group.add(body);
+
+  return group;
+}
+
+const demoAssetProvider: ThreeBoardAssetProvider = {
+  async load(request) {
+    await Promise.resolve();
+
+    if (request.key === "demo.custom-piece") {
+      return {
+        resource: {
+          type: "piece-visual",
+          create: () => createDemoCustomPiece(),
+        },
+      };
+    }
+
+    if (request.key === "demo.glossy-material") {
+      const material = new MeshStandardMaterial({
+        color: "#ffb347",
+        roughness: 0.18,
+        metalness: 0.52,
+      });
+
+      return {
+        resource: {
+          type: "material",
+          material,
+        },
+        dispose: () => material.dispose(),
+      };
+    }
+
+    return undefined;
+  },
+};
 
 const hybridRenderer = new FlatBoard3DPiecesRenderer({
   pixelRatio: Math.min(window.devicePixelRatio || 1, 2),
+  assetProvider: demoAssetProvider,
 });
 const full3dRenderer = new Full3DRenderer({
   pixelRatio: Math.min(window.devicePixelRatio || 1, 2),
+  assetProvider: demoAssetProvider,
 });
 
 const blockedDestinationRule: MovementRule = ({ toSpace }) => {
@@ -215,6 +359,15 @@ function readRenderMode(): BoardRenderMode {
   }
 
   throw new RangeError(`Unknown render mode '${value}'.`);
+}
+
+function readAppearanceTheme(): AppearanceThemeKind {
+  const value = appearanceThemeInput.value;
+  if (value === "midnight" || value === "arcade") {
+    return value;
+  }
+
+  throw new RangeError(`Unknown appearance theme '${value}'.`);
 }
 
 function syncPresentationControls(): void {
@@ -429,10 +582,171 @@ function createPresentationLayout(): SpaceLayout {
   return createExplicitSpaceLayout(positions);
 }
 
+function createDemoAppearanceConfig(): BoardAppearanceConfig {
+  const snapshot = board.snapshot();
+  const spaceIds = topology.getSpaceIds();
+  const pieceIds = snapshot.pieces.map((piece) => piece.id);
+  const selectedPiece = selectedPieceId();
+  const highlightedSpaces = new Set(lastMovement?.path ?? []);
+  const occupiedSpaces = new Set(
+    snapshot.placements.map((placement) => placement.spaceId),
+  );
+  const blockedSpace = blockedSpaceInput.value.trim();
+  const selectedDestination = moveToSpaceInput.value;
+
+  const spaces = Object.fromEntries(
+    spaceIds.map((spaceId, index) => {
+      if (index === 0) {
+        return [
+          spaceId,
+          {
+            style: "accent",
+            appearance: {
+              label: { text: "START" },
+            },
+          },
+        ];
+      }
+
+      if (index === 1) {
+        return [
+          spaceId,
+          {
+            style: "secondary",
+            appearance: {
+              label: { text: spaceId },
+            },
+          },
+        ];
+      }
+
+      if (index === 2) {
+        return [
+          spaceId,
+          {
+            appearance: {
+              color: readAppearanceTheme() === "arcade"
+                ? "#224f9a"
+                : "#263f67",
+              icon: "•",
+            },
+          },
+        ];
+      }
+
+      return [spaceId, {}];
+    }),
+  );
+
+  const pieces = Object.fromEntries(
+    pieceIds.map((pieceId, index) => {
+      if (index === 0) {
+        return [
+          pieceId,
+          {
+            appearance: {
+              assetKey: "demo.custom-piece",
+              color: "#6ee7ff",
+              icon: "▲",
+              scale: 1.12,
+              rotation: 0.12,
+              label: { text: pieceId },
+            },
+          },
+        ];
+      }
+
+      if (index === 1) {
+        return [
+          pieceId,
+          {
+            appearance: {
+              assetKey: "demo.missing-piece",
+              material: "demo.glossy-material",
+              color: "#ffb347",
+              icon: "●",
+              scale: 0.98,
+              label: { text: pieceId },
+            },
+          },
+        ];
+      }
+
+      return [
+        pieceId,
+        {
+          appearance: {
+            color: index % 2 === 0 ? "#f472b6" : "#67e8f9",
+            icon: "◆",
+            label: { text: pieceId },
+          },
+        },
+      ];
+    }),
+  );
+
+  const spaceStates = Object.fromEntries(
+    spaceIds.map((spaceId) => [
+      spaceId,
+      {
+        occupied: occupiedSpaces.has(spaceId),
+        blocked: blockedSpace.length > 0 && blockedSpace === spaceId,
+        highlighted: highlightedSpaces.has(spaceId),
+        selected: selectedDestination === spaceId,
+      },
+    ]),
+  );
+
+  const pieceStates = Object.fromEntries(
+    pieceIds.map((pieceId) => [
+      pieceId,
+      {
+        selected: pieceId === selectedPiece,
+        active: pieceId === selectedPiece,
+        highlighted: pieceId === lastMovement?.pieceId,
+      },
+    ]),
+  );
+
+  return {
+    theme: DEMO_THEMES[readAppearanceTheme()],
+    spaces,
+    pieces,
+    spaceStates,
+    pieceStates,
+  };
+}
+
 function createPieceToken(pieceId: string, selected: boolean): HTMLElement {
   const token = document.createElement("span");
   token.className = selected ? "piece-token is-selected" : "piece-token";
-  token.textContent = pieceId;
+
+  const piece = board.snapshot().pieces.find((candidate) => candidate.id === pieceId) ??
+    { id: pieceId };
+  const appearance = resolvePieceAppearance(piece, activeAppearance);
+  const scale = typeof appearance.scale === "number"
+    ? appearance.scale
+    : appearance.scale?.x ?? 1;
+  const rotation = typeof appearance.rotation === "number"
+    ? appearance.rotation
+    : appearance.rotation?.z ?? appearance.rotation?.y ?? 0;
+  const offsetX = (appearance.offset?.x ?? 0) * 8;
+  const offsetY = -(appearance.offset?.z ?? 0) * 8;
+
+  if (appearance.color) {
+    token.style.background = appearance.color;
+  }
+  if (appearance.label?.color) {
+    token.style.color = appearance.label.color;
+  }
+  token.style.opacity = String(appearance.opacity ?? 1);
+  token.style.transform =
+    `translate(${offsetX}px, ${offsetY}px) scale(${scale}) rotate(${rotation}rad)`;
+
+  const label = appearance.label?.text ?? pieceId;
+  token.textContent = appearance.icon
+    ? `${appearance.icon} ${label}`
+    : label;
   return token;
 }
 
@@ -444,6 +758,18 @@ function createSpaceCard(spaceId: SpaceId): HTMLButtonElement {
   button.className = "space-card";
   button.dataset.space = spaceId;
   button.title = `Use '${spaceId}' as moveTo destination`;
+
+  const domainSpace = board.snapshot().spaces.find(
+    (candidate) => candidate.id === spaceId,
+  ) ?? { id: spaceId };
+  const appearance = resolveSpaceAppearance(domainSpace, activeAppearance);
+  if (appearance.color) {
+    button.style.background = appearance.color;
+  }
+  if (appearance.label?.color) {
+    button.style.color = appearance.label.color;
+  }
+  button.style.opacity = String(appearance.opacity ?? 1);
 
   if (occupants.length > 0) {
     button.classList.add("has-piece");
@@ -459,7 +785,13 @@ function createSpaceCard(spaceId: SpaceId): HTMLButtonElement {
 
   const id = document.createElement("span");
   id.className = "space-id";
-  id.textContent = spaceId;
+  const spaceLabel = appearance.label?.text ?? spaceId;
+  id.textContent = appearance.icon
+    ? `${appearance.icon} ${spaceLabel}`
+    : spaceLabel;
+  if (appearance.label?.color) {
+    id.style.color = appearance.label.color;
+  }
   button.append(id);
 
   const stack = document.createElement("span");
@@ -564,6 +896,7 @@ function tryRenderHybridBoard(): boolean {
     hybridRenderer.render(canvas, {
       snapshot: board.snapshot(),
       layout: createPresentationLayout(),
+      appearance: activeAppearance,
       ...(lastMovement ? { movement: lastMovement } : {}),
     });
     hybridCanvas = canvas;
@@ -593,6 +926,7 @@ function tryRenderFull3DBoard(): boolean {
     full3dRenderer.render(canvas, {
       snapshot: board.snapshot(),
       layout: createPresentationLayout(),
+      appearance: activeAppearance,
       ...(lastMovement ? { movement: lastMovement } : {}),
     });
     full3dCanvas = canvas;
@@ -612,6 +946,7 @@ function tryRenderFull3DBoard(): boolean {
 }
 
 function renderBoard(): void {
+  activeAppearance = createDemoAppearanceConfig();
   spaceElements = new Map();
   boardStage.replaceChildren();
   hybridCanvas = undefined;
@@ -709,6 +1044,33 @@ function currentStateDiagnostics(): unknown {
         board.getPiecesAt(spaceId).map((piece) => piece.id),
       ]),
     ),
+    appearance: {
+      theme: activeAppearance.theme?.name ?? null,
+      spaces: snapshot.spaces.map((space) => {
+        const appearance = resolveSpaceAppearance(space, activeAppearance);
+        return {
+          id: space.id,
+          color: appearance.color ?? null,
+          icon: appearance.icon ?? null,
+          texture: appearance.texture ?? null,
+          material: appearance.material ?? null,
+          assetKey: appearance.assetKey ?? null,
+          state: activeAppearance.spaceStates?.[space.id] ?? null,
+        };
+      }),
+      pieces: snapshot.pieces.map((piece) => {
+        const appearance = resolvePieceAppearance(piece, activeAppearance);
+        return {
+          id: piece.id,
+          color: appearance.color ?? null,
+          icon: appearance.icon ?? null,
+          texture: appearance.texture ?? null,
+          material: appearance.material ?? null,
+          assetKey: appearance.assetKey ?? null,
+          state: activeAppearance.pieceStates?.[piece.id] ?? null,
+        };
+      }),
+    },
     renderer: {
       preferred: BoardRenderMode.FlatBoard3DPieces,
       selected: selectedRenderMode,
@@ -802,6 +1164,7 @@ function setAnimating(value: boolean): void {
   addPieceButton.disabled = value;
   blockedSpaceInput.disabled = value;
   singleOccupancyInput.disabled = value;
+  appearanceThemeInput.disabled = value;
   syncControls();
 }
 
@@ -825,6 +1188,7 @@ async function animateMovement(result: MovementResult): Promise<void> {
           snapshot: board.snapshot(),
           layout: createPresentationLayout(),
           movement: result,
+          appearance: activeAppearance,
         },
         result,
         {
@@ -848,6 +1212,7 @@ async function animateMovement(result: MovementResult): Promise<void> {
           snapshot: board.snapshot(),
           layout: createPresentationLayout(),
           movement: result,
+          appearance: activeAppearance,
         },
         result,
         {
@@ -975,6 +1340,23 @@ renderModeInput.addEventListener("change", () => {
   }
 });
 
+appearanceThemeInput.addEventListener("change", () => {
+  try {
+    const snapshotBefore = board.snapshot();
+    activeAppearance = createDemoAppearanceConfig();
+    renderBoard();
+    renderDiagnostics();
+
+    if (JSON.stringify(board.snapshot()) !== JSON.stringify(snapshotBefore)) {
+      throw new Error("Appearance theme changed logical board state.");
+    }
+
+    setStatus(`Appearance theme: ${activeAppearance.theme?.name ?? "default"}`);
+  } catch (error) {
+    showFailure(error);
+  }
+});
+
 for (const input of [
   cameraProjectionInput,
   cameraPositionX,
@@ -1051,10 +1433,21 @@ moveByButton.addEventListener("click", () => {
   void runMovement(() => board.moveBy(pieceId, distance));
 });
 
-for (const input of [blockedSpaceInput, singleOccupancyInput]) {
-  input.addEventListener("input", renderDiagnostics);
-  input.addEventListener("change", renderDiagnostics);
-}
+blockedSpaceInput.addEventListener("input", () => {
+  renderBoard();
+  renderDiagnostics();
+});
+blockedSpaceInput.addEventListener("change", () => {
+  renderBoard();
+  renderDiagnostics();
+});
+singleOccupancyInput.addEventListener("input", renderDiagnostics);
+singleOccupancyInput.addEventListener("change", renderDiagnostics);
+
+moveToSpaceInput.addEventListener("change", () => {
+  renderBoard();
+  renderDiagnostics();
+});
 
 for (const tab of diagnosticTabs) {
   tab.addEventListener("click", () => {
@@ -1074,6 +1467,7 @@ function rerenderActiveRendererAfterResize(): void {
       full3dRenderer.render(full3dCanvas, {
         snapshot: board.snapshot(),
         layout: createPresentationLayout(),
+        appearance: activeAppearance,
         ...(lastMovement ? { movement: lastMovement } : {}),
       });
       return;
@@ -1083,6 +1477,7 @@ function rerenderActiveRendererAfterResize(): void {
       hybridRenderer.render(hybridCanvas, {
         snapshot: board.snapshot(),
         layout: createPresentationLayout(),
+        appearance: activeAppearance,
         ...(lastMovement ? { movement: lastMovement } : {}),
       });
     }
@@ -1114,12 +1509,23 @@ syncPresentationControls();
 updateTopologyOptions();
 rebuildBoard();
 
-const initialSpaceId = topology.getSpaceIds()[0];
+const initialSpaceIds = topology.getSpaceIds();
+const initialSpaceId = initialSpaceIds[0];
 if (initialSpaceId) {
   board.addPiece({ id: "player-1" }, initialSpaceId);
-  pieceIdInput.value = "player-2";
+
+  const secondSpaceId = initialSpaceIds[1];
+  if (secondSpaceId) {
+    board.addPiece({ id: "player-2" }, secondSpaceId);
+  }
+
+  pieceIdInput.value = secondSpaceId ? "player-3" : "player-2";
   syncControls("player-1");
   renderBoard();
   renderDiagnostics();
-  setStatus(`Ready · player-1 starts on ${initialSpaceId}`);
+  setStatus(
+    secondSpaceId
+      ? `Ready · custom player-1 and fallback player-2 are visible`
+      : `Ready · player-1 starts on ${initialSpaceId}`,
+  );
 }

@@ -38,3 +38,9 @@ export type {
   Full3DProjection,
   ResolvedFull3DCameraOptions,
 } from "./full3dCamera.js";
+
+export {
+  applyThreeAppearanceTransform,
+  resolveThreeAppearanceTransform,
+} from "./appearanceMapping.js";
+export type { ThreeAppearanceTransform } from "./appearanceMapping.js";

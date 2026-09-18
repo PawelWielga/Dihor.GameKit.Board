@@ -147,7 +147,7 @@ presentation state never mutates topology, occupancy, movement state or entity
 data. Unknown named styles are ignored and built-in defaults remain available.
 
 Portable descriptors intentionally use strings and renderer-neutral transforms.
-`assetKey`, `texture` and `icon` are logical references; concrete asset
+`assetKey`, `texture`, `material` and `icon` are logical references; concrete asset
 loading and renderer-specific resources belong to renderer adapters.
 
 ## Renderer asset providers
@@ -235,6 +235,55 @@ A space visual can be supplied the same way with `type: "space-visual"`, while
 texture and material assets use `type: "texture"` and `type: "material"`.
 Renderer adapters remain responsible for applying those resources and for
 disposing per-instance scene objects they create.
+
+## Appearance behavior across render modes
+
+The same `BoardAppearanceConfig` can be passed to every render mode. Appearance
+is resolved from logical IDs and presentation state before renderer-specific
+mapping happens.
+
+| Appearance capability | TopDown | FlatBoard3DPieces | Full3D |
+| --- | --- | --- | --- |
+| space color / opacity | yes | yes | yes |
+| space icon / label | yes | ignored gracefully | ignored gracefully |
+| space texture | not required by the HTML demo | yes | yes |
+| custom space 3D visual | not applicable | ignored gracefully | yes |
+| piece color / opacity | yes | yes | yes |
+| piece icon / label | yes | ignored gracefully | ignored gracefully |
+| piece scale / rotation / offset | yes | yes | yes |
+| custom piece 3D visual / model | not applicable | yes | yes |
+| logical material key | not applicable | yes for default pieces | yes for spaces and default pieces |
+
+The hybrid renderer keeps the board in its orthographic flat pass. Space
+appearance may change color, opacity, texture, scale or flat rotation, while
+pieces remain real 3D objects in the perspective pass. Piece dimensions and
+visual offsets are applied after the renderer calculates the logical ground
+anchor, so they cannot change occupancy or movement coordinates.
+
+The Full3D renderer applies the same resolved appearance to real scene objects.
+Custom space and piece factories receive logical IDs plus the resolved portable
+appearance. A missing, failed or incompatible asset falls back to the built-in
+tile or pawn instead of changing board logic.
+
+Both Three.js renderers accept an optional `assetProvider`:
+
+```ts
+const renderer = new FlatBoard3DPiecesRenderer({
+  assetProvider,
+});
+
+renderer.render(canvas, {
+  snapshot: board.snapshot(),
+  layout,
+  appearance,
+});
+```
+
+Async provider results are cached. The renderer initially uses its built-in
+visual when a custom asset is still loading and refreshes the presentation when
+the resource settles. Animation continues to consume only the authoritative
+`MovementPath`; appearance transforms are visual offsets relative to each
+logical path anchor.
 
 ## Presentation-only state
 
@@ -332,3 +381,15 @@ The demo exposes all three render modes:
 
 Changing this selector calls only the presentation path. The existing board
 instance, topology, placements and latest movement result are retained.
+
+The demo also exposes two appearance themes. Switching themes reuses the same
+logical board and demonstrates:
+
+- reusable space styles plus per-space overrides,
+- selected, occupied, blocked and highlighted presentation states,
+- distinct per-piece appearance,
+- a custom 3D visual for the first demo piece,
+- a deliberately missing custom visual for the second piece, which falls back
+  to the built-in pawn while still applying its material configuration,
+- appearance diagnostics containing logical IDs, portable asset/material keys
+  and presentation state without exposing Three.js internals.

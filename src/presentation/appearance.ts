@@ -30,6 +30,7 @@ export interface AppearanceVisual {
   readonly opacity?: number;
   readonly icon?: string;
   readonly texture?: string;
+  readonly material?: string;
   readonly assetKey?: string;
   readonly scale?: number | PresentationPoint3;
   readonly rotation?: number | PresentationPoint3;
