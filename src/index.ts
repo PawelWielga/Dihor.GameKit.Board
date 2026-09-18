@@ -43,3 +43,17 @@ export type {
   MovementRuleRejected,
   MovementRuleResult,
 } from "./movement/index.js";
+
+export {
+  createMovementEvents,
+  MOVEMENT_EVENT_SCHEMA,
+  MOVEMENT_EVENT_VERSION,
+} from "./events/index.js";
+export type {
+  CreateMovementEventsOptions,
+  MoveCompletedEvent,
+  MovementEvent,
+  MovementEventState,
+  MoveStartedEvent,
+  SpaceEnteredEvent,
+} from "./events/index.js";
