@@ -40,30 +40,115 @@ The board state and movement result are authoritative. Rendering only presents t
 
 A move across several spaces is represented as a path of visited spaces rather than only a start and end position. This allows games to react to events such as passing START, entering terrain, traps, portals or encounters.
 
-## Planned API direction
+## Movement API
+
+A board can be associated with a topology and then perform logical movement:
 
 ```ts
-const board = new Board({
-  topology: new SquareGrid(8, 8)
-});
+const topology = new LinearTopology(["start", "a", "b", "finish"]);
+const board = new Board({ topology });
 
-board.addPiece({
-  id: "player-1",
-  position: { x: 2, y: 3 }
-});
+for (const spaceId of topology.getSpaceIds()) {
+  board.addSpace({ id: spaceId });
+}
 
-const result = board.moveTo("player-1", { x: 5, y: 3 });
+board.addPiece({ id: "player-1" }, "start");
+
+const result = board.moveBy("player-1", 3);
 
 console.log(result.path);
+// ["start", "a", "b", "finish"]
 ```
 
-For track-style games:
+`moveTo()` finds a deterministic shortest path through the topology using
+breadth-first search. The search is bounded to spaces exposed by the topology
+and has O(V + E) complexity. `moveBy()` is available for ordered topologies
+such as `LinearTopology` and records every traversed space, including repeated
+spaces on looping tracks.
+
+A zero-distance move succeeds with a path containing only the current space.
+Invalid movement is rejected before board placement changes, so movement is
+atomic from the consumer's perspective.
+
+## Networking boundary
+
+Board movement events are plain, versioned JSON-friendly objects. After the host
+accepts a move, it can turn the authoritative `MovementResult` into an ordered
+event stream:
 
 ```ts
-const result = board.moveBy("player-1", 4);
+const result = board.moveBy("player-1", 3);
+const events = createMovementEvents(result, {
+  movementId: "turn-42-player-1",
+});
 ```
 
-Exact API names may evolve while the first public preview is being implemented.
+The stream contains `movement.started`, one `movement.space-entered` event
+for every space entered after the origin, and `movement.completed`. Events
+carry schema/version fields plus authoritative piece position state; start and
+completion also carry the complete movement path.
+
+`Dihor.GameKit.Board` does not choose or depend on a transport.
+[Dihor.GameKit.Networking](https://github.com/PawelWielga/Dihor.GameKit.Networking)
+or a game-specific networking layer is responsible for host/client delivery,
+ordering, reliability and reconnect/replay behavior. Renderers should animate
+from the authoritative path/state rather than become a source of game state.
+
+## Rendering boundary
+
+Rendering is configured outside the authoritative `Board`. The public
+presentation API exposes `BoardRenderMode.TopDown`,
+`BoardRenderMode.FlatBoard3DPieces` and `BoardRenderMode.Full3D`, plus
+renderer-neutral coordinate layouts.
+
+```ts
+const topology = new SquareGridTopology(8, 8);
+const layout = createSquareGridSpaceLayout(topology, { cellSize: 1.25 });
+
+const renderInput = {
+  snapshot: board.snapshot(),
+  layout,
+};
+```
+
+Camera, zoom, lighting, materials and animation state remain presentation-only.
+The optional `@dihor/gamekit-board/three` entry point provides both the
+preferred hybrid renderer and a configurable `Full3DRenderer`. The demo can
+switch between `TopDown`, `FlatBoard3DPieces` and `Full3D` without
+rebuilding the logical board; the hybrid mode remains the default showcase.
+WebGL modes fall back to HTML/SVG when unavailable.
+
+See [docs/rendering.md](docs/rendering.md) for the full boundary.
+
+## Interactive demo
+
+The repository includes a framework-free Vite playground that consumes only the
+package's public API. It supports graph, linear, looping and square-grid
+topologies, piece placement, `moveTo()`, `moveBy()`, movement rules,
+occupancy checks, `MovementPath` visualization and movement-event diagnostics.
+
+Published locations:
+
+- main: https://pawelwielga.github.io/Dihor.GameKit.Board/
+- dev: https://pawelwielga.github.io/Dihor.GameKit.Board/dev/
+
+The Pages workflow publishes only validated branch commits. During the first
+rollout, deployment starts once both `main` and `dev` contain demo support.
+
+Run the demo locally:
+
+```bash
+npm install
+npm run dev:demo
+```
+
+Validate the production demo bundle:
+
+```bash
+npm run build:demo
+```
+
+Generated `dist-demo/` output is intentionally not committed.
 
 ## Architecture direction
 
@@ -72,23 +157,12 @@ src/
 ├── core/       # Board, Space, Piece, Position and domain results
 ├── topology/   # Graph, linear and grid topology implementations
 ├── movement/   # Movement calculation and validation rules
-├── events/     # Versioned transport-neutral movement contracts
-└── index.ts    # Small recommended public API
+├── events/       # Versioned transport-neutral movement contracts
+├── presentation/ # Renderer-neutral modes and coordinate mapping
+└── index.ts      # Small recommended public API
 ```
 
 The core must not depend on Three.js, Flutter, Unity, DOM APIs, WebSockets or another concrete presentation/transport technology.
-
-## Rendering direction
-
-Rendering remains separate from the authoritative board model. The reference/demo presentation is planned to support three configurable modes:
-
-- `TopDown` — simple orthographic top-down presentation,
-- `FlatBoard3DPieces` — a visually flat orthographic board combined with separately rendered 3D pieces; this is the preferred showcase mode,
-- `Full3D` — board and pieces rendered together in a configurable 3D scene.
-
-Switching render modes must not change board state, movement rules or piece positions.
-
-See [Rendering architecture](docs/rendering.md) for the multi-pass camera model and presentation boundary.
 
 ## Dihor.GameKit
 

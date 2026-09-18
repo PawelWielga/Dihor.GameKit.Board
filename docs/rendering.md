@@ -1,154 +1,165 @@
 # Rendering architecture
 
-`Dihor.GameKit.Board` keeps board state, topology and movement independent from rendering. Rendering is a presentation concern that consumes authoritative board state and movement paths.
-
-This document defines the direction for the reference/demo renderer and any future optional rendering adapter.
-
-## Goals
-
-- keep the domain model independent from Three.js, DOM APIs, Unity, Flutter and other rendering engines,
-- allow the same board state to be presented in multiple visual styles,
-- support a flat, highly readable board while preserving visibly 3D pieces,
-- retain a configurable full-3D mode where both the board and pieces are rendered in a 3D scene,
-- allow switching render modes without changing board state or game rules.
+Rendering is an optional presentation layer. The logical `Board`, topology,
+movement validation, occupancy and events remain authoritative and do not depend
+on a renderer.
 
 ## Render modes
 
-The presentation layer should expose a small render-mode API equivalent to:
+`BoardRenderMode` defines three presentation modes:
+
+- `TopDown` — flat 2D/top-down presentation,
+- `FlatBoard3DPieces` — flat board projection with separately rendered 3D pieces,
+- `Full3D` — board and pieces rendered together in a 3D scene.
+
+Changing the render mode must not rebuild the logical board, move a piece,
+recalculate a legal path or alter topology.
+
+## Coordinate boundary
+
+Presentation coordinates use a renderer-neutral right-handed 3D point:
 
 ```ts
-export enum BoardRenderMode {
-  TopDown = "top-down",
-  FlatBoard3DPieces = "flat-board-3d-pieces",
-  Full3D = "full-3d"
+interface PresentationPoint3 {
+  x: number;
+  y: number;
+  z: number;
 }
 ```
 
-The exact TypeScript shape may evolve, but these three capabilities are intentional.
+The default helpers place the board on the XZ plane and use Y as presentation
+height. This makes the same layout usable by a DOM/SVG renderer, Three.js,
+Unity, Flutter or another consumer.
 
-### `TopDown`
+Example:
 
-A simple orthographic top-down presentation.
+```ts
+const topology = new SquareGridTopology(8, 8);
+const layout = createSquareGridSpaceLayout(topology, {
+  cellSize: 1.25,
+  origin: { x: -4.375, y: 0, z: -4.375 },
+});
 
-Use cases:
+const input = {
+  snapshot: board.snapshot(),
+  layout,
+};
 
-- diagnostics,
-- simple games,
-- accessibility/readability focused layouts,
-- low-cost fallback rendering.
-
-The board and pieces are viewed from above without perspective distortion.
-
-### `FlatBoard3DPieces`
-
-The preferred reference/demo presentation.
-
-The renderer uses separate rendering passes/cameras:
-
-1. **Board pass**: render the board with an orthographic, visually flat projection.
-2. **Piece pass**: render pieces as real 3D meshes with visible volume, lighting and shadows.
-3. **Composition**: combine both passes while keeping piece positions aligned with logical board spaces.
-
-The result should look like a flat digital board with physical 3D pieces standing on it.
-
-Important requirements:
-
-- the board must remain visually flat and readable,
-- pieces must retain visible 3D volume,
-- lighting and shadows may reinforce depth,
-- board-space-to-render-space mapping must be deterministic,
-- resizing/aspect-ratio changes must preserve alignment,
-- the renderer must never decide whether movement is valid.
-
-### `Full3D`
-
-Render the board and pieces in the same 3D scene.
-
-The presentation layer may expose camera controls such as:
-
-- perspective/orthographic projection where supported,
-- position,
-- target,
-- tilt,
-- rotation,
-- zoom/distance.
-
-This mode is useful for games that want a physical-table or diorama-style presentation.
-
-## Separation from the domain model
-
-Render mode is **not board state**.
-
-The core model should continue to expose concepts such as:
-
-```text
-Board
-Space
-Piece
-Placement
-MovementPath
-MovementResult
+const pieces = mapPiecesToPresentation(input.snapshot, input.layout);
 ```
 
-A renderer consumes these concepts and maps them into presentation coordinates.
+`createLinearSpaceLayout()` and `createSquareGridSpaceLayout()` provide
+deterministic mappings for built-in topologies. Graphs and custom topologies
+can use `createExplicitSpaceLayout()` or `createSpaceLayout()`.
 
-For example, a piece occupying logical space `A4` remains on `A4` regardless of whether the user switches from `FlatBoard3DPieces` to `Full3D`.
+## Renderer contract
 
-```text
-authoritative board state
-        |
-        v
-presentation mapping
-        |
-        +--> TopDown
-        |
-        +--> FlatBoard3DPieces
-        |
-        +--> Full3D
+A renderer consumes `BoardRenderInput`:
+
+- an authoritative `BoardSnapshot`,
+- a presentation-only `SpaceLayout`,
+- optionally the latest authoritative `MovementResult`.
+
+The renderer may animate the supplied movement path, but it must never decide
+whether the move is legal.
+
+`BoardRenderer<TTarget>` is intentionally generic. A concrete renderer can use
+an HTML element, canvas, Three.js scene, Flutter bridge or any other target
+without adding that technology to the domain core.
+
+## Presentation-only state
+
+Camera position, target, zoom, projection, viewport, lighting, shadows,
+materials and animation timing belong to renderer state/configuration.
+
+They are deliberately not stored in:
+
+- `Board`,
+- `BoardSnapshot`,
+- topology objects,
+- movement rules,
+- movement events.
+
+This guarantees that switching presentation mode or changing camera/lighting
+cannot change gameplay state.
+
+## FlatBoard3DPieces reference renderer
+
+The optional `@dihor/gamekit-board/three` entry point provides
+`FlatBoard3DPiecesRenderer`. Three.js is an optional peer dependency and does
+not leak into the domain/core entry points.
+
+```ts
+import { FlatBoard3DPiecesRenderer } from "@dihor/gamekit-board/three";
+
+const renderer = new FlatBoard3DPiecesRenderer({
+  shadows: true,
+  pixelRatio: 2,
+});
+
+renderer.render(canvas, {
+  snapshot: board.snapshot(),
+  layout,
+  movement: lastMovement,
+});
 ```
 
-Changing render mode must not mutate the board, recalculate legal movement or alter game rules.
+The renderer uses two explicit passes:
 
-## Hybrid rendering details
+1. a flat orthographic board pass,
+2. a perspective 3D piece/light/shadow pass.
 
-For `FlatBoard3DPieces`, the reference implementation should prefer an explicit multi-pass pipeline instead of trying to fake the effect with one camera.
+Each logical space is first projected to the board pass NDC coordinate. The 3D
+pass casts that same NDC coordinate onto its ground plane, so piece bases remain
+screen-aligned with the flat board even though the piece camera is angled.
+Viewport changes recompute both mappings from the same `SpaceLayout`.
 
-A conceptual pipeline:
+`animateMovement()` consumes the already-authorized `MovementResult.path`.
+It never calculates legality or mutates the board.
 
-```text
-Board state
-    |
-    +--> board projection ------> orthographic board pass ---+
-    |                                                        |
-    +--> piece transforms -----> 3D piece pass --------------+--> composed frame
+If WebGL creation fails, consumers can catch the render failure and keep a
+low-cost 2D renderer. The bundled demo does exactly this and falls back to its
+HTML/SVG presentation.
+
+## Full3D reference renderer
+
+The same optional Three.js entry point also exports `Full3DRenderer`. It renders
+board spaces and pieces in one real 3D scene while consuming exactly the same
+`BoardRenderInput` and `SpaceLayout`.
+
+```ts
+import { Full3DRenderer } from "@dihor/gamekit-board/three";
+
+const renderer = new Full3DRenderer({
+  camera: {
+    projection: "perspective",
+    position: { x: 6, y: 8, z: 9 },
+    target: { x: 0, y: 0, z: 0 },
+    zoom: 1.1,
+  },
+});
+
+renderer.render(canvas, {
+  snapshot: board.snapshot(),
+  layout,
+  movement: lastMovement,
+});
 ```
 
-The implementation must define one shared board-to-screen mapping so that both passes remain synchronized.
+Camera `position` and `target` define angle/tilt. Both perspective and
+orthographic projections are supported, along with zoom. Omitting position or
+target enables automatic framing from the current presentation layout.
 
-Shadows should visually connect pieces to the board without making shadow data part of gameplay state.
+The renderer's `setCameraOptions()` changes presentation only. It does not have
+a `Board` reference and cannot move pieces, mutate topology or validate moves.
 
-## Demo behavior
+## Demo mode switching
 
-The interactive demo should eventually provide a render-mode selector containing:
+The demo exposes all three render modes:
 
-- Top Down,
-- Flat Board + 3D Pieces,
-- Full 3D.
+- `TopDown` uses the HTML/SVG renderer,
+- `FlatBoard3DPieces` is the preferred/default showcase,
+- `Full3D` uses the single-scene 3D renderer.
 
-`FlatBoard3DPieces` should be the preferred/default showcase mode once the 3D renderer is implemented.
-
-Switching modes should preserve:
-
-- selected topology,
-- spaces,
-- pieces,
-- piece positions,
-- movement history/current path where applicable.
-
-Only presentation-specific camera configuration may change.
-
-## Engine independence
-
-The first 3D reference renderer may use Three.js, but the core package must not gain a Three.js dependency because of it.
-
-If rendering grows beyond the demo, prefer an optional adapter/package boundary over coupling the core to one engine.
+Changing this selector calls only the presentation path. The existing board
+instance, topology, placements and latest movement result are retained.

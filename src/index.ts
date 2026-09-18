@@ -1,8 +1,83 @@
-/**
- * Dihor.GameKit.Board
- *
- * Framework-agnostic board topology and piece movement primitives.
- *
- * The public API will be introduced incrementally through focused issues.
- */
-export {};
+export { Board, BoardStateError } from "./core/index.js";
+export type {
+  BoardOptions,
+  BoardSnapshot,
+  BoardStateErrorCode,
+  OccupancyPolicy,
+  OccupancyPolicyContext,
+  Piece,
+  PieceId,
+  PiecePlacement,
+  Space,
+  SpaceId,
+} from "./core/index.js";
+
+export { GraphTopology, LinearTopology, SquareGridTopology, TopologyError } from "./topology/index.js";
+export type {
+  GraphConnectionOptions,
+  LinearDirection,
+  LinearTopologyOptions,
+  OrderedTopology,
+  SquareGridCoordinate,
+  Topology,
+  TopologyErrorCode,
+} from "./topology/index.js";
+
+export { MovementError } from "./movement/index.js";
+export type {
+  MovementErrorCode,
+  MovementPath,
+  MovementResult,
+} from "./movement/index.js";
+
+export {
+  allowMovement,
+  combineMovementRules,
+  evaluateMovementRules,
+  rejectMovement,
+} from "./movement/index.js";
+export type {
+  MovementRule,
+  MovementRuleAllowed,
+  MovementRuleContext,
+  MovementRuleRejected,
+  MovementRuleResult,
+} from "./movement/index.js";
+
+export {
+  createMovementEvents,
+  MOVEMENT_EVENT_SCHEMA,
+  MOVEMENT_EVENT_VERSION,
+} from "./events/index.js";
+export type {
+  CreateMovementEventsOptions,
+  MoveCompletedEvent,
+  MovementEvent,
+  MovementEventState,
+  MoveStartedEvent,
+  SpaceEnteredEvent,
+} from "./events/index.js";
+
+export {
+  BoardRenderMode,
+  createExplicitSpaceLayout,
+  createLinearSpaceLayout,
+  createSpaceLayout,
+  createSquareGridSpaceLayout,
+  mapPiecesToPresentation,
+  PresentationError,
+} from "./presentation/index.js";
+export type {
+  BoardPresentationState,
+  BoardRenderer,
+  BoardRenderInput,
+  ExplicitLayoutOptions,
+  LinearLayoutOptions,
+  PiecePresentation,
+  PresentationErrorCode,
+  PresentationPoint3,
+  SpaceLayout,
+  SpacePositionEntry,
+  SpacePresentation,
+  SquareGridLayoutOptions,
+} from "./presentation/index.js";
