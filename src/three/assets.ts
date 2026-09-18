@@ -22,7 +22,7 @@ export interface ThreeMaterialAsset {
 
 export interface ThreeModelAsset {
   readonly type: "model";
-  create(): Object3D | Promise<Object3D>;
+  create(): Object3D;
 }
 
 export interface ThreePieceVisualFactoryContext {
@@ -39,14 +39,14 @@ export interface ThreePieceVisualAsset {
   readonly type: "piece-visual";
   create(
     context: ThreePieceVisualFactoryContext,
-  ): Object3D | Promise<Object3D>;
+  ): Object3D;
 }
 
 export interface ThreeSpaceVisualAsset {
   readonly type: "space-visual";
   create(
     context: ThreeSpaceVisualFactoryContext,
-  ): Object3D | Promise<Object3D>;
+  ): Object3D;
 }
 
 export type ThreeBoardAsset =
