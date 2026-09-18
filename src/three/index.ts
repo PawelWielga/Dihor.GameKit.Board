@@ -1,3 +1,15 @@
+export type {
+  ThreeBoardAsset,
+  ThreeBoardAssetProvider,
+  ThreeMaterialAsset,
+  ThreeModelAsset,
+  ThreePieceVisualAsset,
+  ThreePieceVisualFactoryContext,
+  ThreeSpaceVisualAsset,
+  ThreeSpaceVisualFactoryContext,
+  ThreeTextureAsset,
+} from "./assets.js";
+
 export { FlatBoard3DPiecesRenderer } from "./FlatBoard3DPiecesRenderer.js";
 export type {
   FlatBoard3DPiecesRendererOptions,

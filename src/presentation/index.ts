@@ -20,6 +20,20 @@ export type {
   SpaceAppearanceResolver,
   SpaceAppearanceResolverContext,
 } from "./appearance.js";
+export {
+  RendererAssetCache,
+  RendererAssetKind,
+} from "./assets.js";
+export type {
+  RendererAssetCacheOptions,
+  RendererAssetEntity,
+  RendererAssetHandle,
+  RendererAssetLoadResult,
+  RendererAssetProvider,
+  RendererAssetRequest,
+  RendererAssetSnapshot,
+  RendererAssetStatus,
+} from "./assets.js";
 export { BoardRenderMode } from "./contracts.js";
 export type {
   BoardPresentationState,
