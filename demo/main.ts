@@ -11,7 +11,11 @@ import {
   LinearTopology,
   MovementError,
   rejectMovement,
+  resolvePieceAppearance,
+  resolveSpaceAppearance,
   SquareGridTopology,
+  type BoardAppearanceConfig,
+  type BoardAppearanceTheme,
   type MovementEvent,
   type MovementResult,
   type MovementRule,
@@ -23,10 +27,19 @@ import {
   FlatBoard3DPiecesRenderer,
   Full3DRenderer,
   type Full3DCameraOptions,
+  type ThreeBoardAssetProvider,
 } from "@dihor/gamekit-board/three";
+import {
+  ConeGeometry,
+  CylinderGeometry,
+  Group,
+  Mesh,
+  MeshStandardMaterial,
+} from "three";
 
 type TopologyKind = "linear" | "looping" | "grid" | "graph";
 type DiagnosticView = "state" | "events";
+type AppearanceThemeKind = "midnight" | "arcade";
 
 interface DemoFailure {
   readonly code?: string;
@@ -70,6 +83,7 @@ const blockedSpaceInput = requireElement<HTMLInputElement>("#blocked-space");
 const singleOccupancyInput = requireElement<HTMLInputElement>("#single-occupancy");
 
 const renderModeInput = requireElement<HTMLSelectElement>("#render-mode");
+const appearanceThemeInput = requireElement<HTMLSelectElement>("#appearance-theme");
 const full3dControls = requireElement<HTMLElement>("#full3d-controls");
 const cameraProjectionInput = requireElement<HTMLSelectElement>("#camera-projection");
 const cameraPositionX = requireElement<HTMLInputElement>("#camera-position-x");
@@ -106,12 +120,142 @@ let full3dCanvas: HTMLCanvasElement | undefined;
 let usingHybridRenderer = false;
 let usingFull3DRenderer = false;
 let selectedRenderMode: BoardRenderMode = BoardRenderMode.FlatBoard3DPieces;
+let activeAppearance: BoardAppearanceConfig = {};
+
+const DEMO_THEMES: Readonly<Record<AppearanceThemeKind, BoardAppearanceTheme>> = {
+  midnight: {
+    name: "Midnight",
+    spaceDefault: {
+      color: "#172235",
+      opacity: 1,
+      variants: {
+        occupied: { color: "#243653" },
+        blocked: { color: "#5f2832" },
+        highlighted: { color: "#3f3b85" },
+        selected: { color: "#315a73" },
+      },
+    },
+    pieceDefault: {
+      color: "#5e7fe8",
+      variants: {
+        highlighted: { color: "#a98cff" },
+        selected: { scale: 1.12 },
+        active: { color: "#7c9cff", scale: 1.16 },
+      },
+    },
+    spaceStyles: {
+      accent: {
+        color: "#165d63",
+        icon: "★",
+        label: { color: "#ecfeff" },
+      },
+      secondary: {
+        color: "#5b3d22",
+        icon: "◆",
+        label: { color: "#fff7ed" },
+      },
+    },
+  },
+  arcade: {
+    name: "Arcade",
+    spaceDefault: {
+      color: "#54216f",
+      opacity: 1,
+      variants: {
+        occupied: { color: "#7b2f91" },
+        blocked: { color: "#8d2739" },
+        highlighted: { color: "#9a4b10" },
+        selected: { color: "#116466" },
+      },
+    },
+    pieceDefault: {
+      color: "#20c997",
+      variants: {
+        highlighted: { color: "#f59f00" },
+        selected: { scale: 1.18 },
+        active: { color: "#ff6b9a", scale: 1.2 },
+      },
+    },
+    spaceStyles: {
+      accent: {
+        color: "#007f73",
+        icon: "✦",
+        label: { color: "#e6fffb" },
+      },
+      secondary: {
+        color: "#ad5f00",
+        icon: "⬢",
+        label: { color: "#fff4e6" },
+      },
+    },
+  },
+};
+
+function createDemoCustomPiece(): Group {
+  const group = new Group();
+  const material = new MeshStandardMaterial({
+    color: "#6ee7ff",
+    roughness: 0.28,
+    metalness: 0.34,
+  });
+
+  const base = new Mesh(
+    new CylinderGeometry(0.24, 0.3, 0.2, 24),
+    material,
+  );
+  base.position.y = 0.1;
+  group.add(base);
+
+  const body = new Mesh(
+    new ConeGeometry(0.26, 0.72, 24),
+    material,
+  );
+  body.position.y = 0.54;
+  group.add(body);
+
+  return group;
+}
+
+const demoAssetProvider: ThreeBoardAssetProvider = {
+  async load(request) {
+    await Promise.resolve();
+
+    if (request.key === "demo.custom-piece") {
+      return {
+        resource: {
+          type: "piece-visual",
+          create: () => createDemoCustomPiece(),
+        },
+      };
+    }
+
+    if (request.key === "demo.glossy-material") {
+      const material = new MeshStandardMaterial({
+        color: "#ffb347",
+        roughness: 0.18,
+        metalness: 0.52,
+      });
+
+      return {
+        resource: {
+          type: "material",
+          material,
+        },
+        dispose: () => material.dispose(),
+      };
+    }
+
+    return undefined;
+  },
+};
 
 const hybridRenderer = new FlatBoard3DPiecesRenderer({
   pixelRatio: Math.min(window.devicePixelRatio || 1, 2),
+  assetProvider: demoAssetProvider,
 });
 const full3dRenderer = new Full3DRenderer({
   pixelRatio: Math.min(window.devicePixelRatio || 1, 2),
+  assetProvider: demoAssetProvider,
 });
 
 const blockedDestinationRule: MovementRule = ({ toSpace }) => {
