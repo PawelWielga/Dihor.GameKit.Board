@@ -57,3 +57,27 @@ export type {
   MoveStartedEvent,
   SpaceEnteredEvent,
 } from "./events/index.js";
+
+export {
+  BoardRenderMode,
+  createExplicitSpaceLayout,
+  createLinearSpaceLayout,
+  createSpaceLayout,
+  createSquareGridSpaceLayout,
+  mapPiecesToPresentation,
+  PresentationError,
+} from "./presentation/index.js";
+export type {
+  BoardPresentationState,
+  BoardRenderer,
+  BoardRenderInput,
+  ExplicitLayoutOptions,
+  LinearLayoutOptions,
+  PiecePresentation,
+  PresentationErrorCode,
+  PresentationPoint3,
+  SpaceLayout,
+  SpacePositionEntry,
+  SpacePresentation,
+  SquareGridLayoutOptions,
+} from "./presentation/index.js";

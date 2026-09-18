@@ -15,6 +15,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./presentation": {
+      "types": "./dist/presentation/index.d.ts",
+      "import": "./dist/presentation/index.js"
     }
   },
   "files": [
