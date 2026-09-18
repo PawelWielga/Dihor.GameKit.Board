@@ -112,9 +112,11 @@ const renderInput = {
 ```
 
 Camera, zoom, lighting, materials and animation state remain presentation-only.
-The optional `@dihor/gamekit-board/three` entry point provides the preferred
-hybrid renderer: a flat orthographic board pass composed with real 3D pieces,
-lighting and shadows. The demo falls back to HTML/SVG when WebGL is unavailable.
+The optional `@dihor/gamekit-board/three` entry point provides both the
+preferred hybrid renderer and a configurable `Full3DRenderer`. The demo can
+switch between `TopDown`, `FlatBoard3DPieces` and `Full3D` without
+rebuilding the logical board; the hybrid mode remains the default showcase.
+WebGL modes fall back to HTML/SVG when unavailable.
 
 See [docs/rendering.md](docs/rendering.md) for the full boundary.
 
