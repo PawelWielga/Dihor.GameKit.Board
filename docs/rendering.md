@@ -214,25 +214,51 @@ The optional `@dihor/gamekit-board/three` entry point defines
 piece factories or space factories without exposing Three.js from the package
 root.
 
-For example, an application can load a GLB/glTF model however it prefers and
-publish a factory under the same logical key used by `PieceAppearance.assetKey`:
+Appearance declares whether `assetKey` represents an entity-specific visual
+factory or a generic 3D model. The default is `AppearanceAssetKind.Visual`,
+which maps to `RendererAssetKind.PieceVisual` or
+`RendererAssetKind.SpaceVisual` depending on the entity. Setting
+`AppearanceAssetKind.Model` makes the renderer request
+`RendererAssetKind.Model` directly, with no speculative or duplicate provider
+load.
+
+For example, an application can load a GLB/glTF model under the same logical key
+used by `PieceAppearance.assetKey`:
 
 ```ts
+import {
+  AppearanceAssetKind,
+  RendererAssetKind,
+} from "@dihor/gamekit-board";
 import type {
   ThreeBoardAssetProvider,
-  ThreeBoardAsset,
+  ThreeModelAsset,
 } from "@dihor/gamekit-board/three";
+
+const appearance = {
+  pieces: {
+    knight: {
+      appearance: {
+        assetKey: "piece.knight",
+        assetKind: AppearanceAssetKind.Model,
+      },
+    },
+  },
+};
 
 const provider: ThreeBoardAssetProvider = {
   async load(request) {
-    if (request.key !== "piece.knight") {
+    if (
+      request.key !== "piece.knight" ||
+      request.kind !== RendererAssetKind.Model
+    ) {
       return undefined;
     }
 
     const model = await loadKnightModel();
 
-    const resource: ThreeBoardAsset = {
-      type: "piece-visual",
+    const resource: ThreeModelAsset = {
+      type: "model",
       create: () => model.clone(true),
     };
 
@@ -244,8 +270,10 @@ const provider: ThreeBoardAssetProvider = {
 };
 ```
 
-A space visual can be supplied the same way with `type: "space-visual"`, while
-texture and material assets use `type: "texture"` and `type: "material"`.
+Full3D spaces use the same `AppearanceAssetKind.Model` contract. Entity-specific
+factories remain available with the default visual kind and return
+`type: "piece-visual"` or `type: "space-visual"`. Texture and material assets
+continue to use their dedicated `texture` and `material` appearance keys.
 Renderer adapters remain responsible for applying those resources and for
 disposing per-instance scene objects they create.
 

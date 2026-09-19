@@ -1,4 +1,5 @@
 export {
+  AppearanceAssetKind,
   AppearanceState,
   DEFAULT_PIECE_APPEARANCE,
   DEFAULT_SPACE_APPEARANCE,

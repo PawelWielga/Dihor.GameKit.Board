@@ -4,8 +4,14 @@ import type {
   Texture,
 } from "three";
 import type { PieceId, SpaceId } from "../core/index.js";
+import {
+  AppearanceAssetKind,
+  RendererAssetKind,
+} from "../presentation/index.js";
 import type {
+  AppearanceVisual,
   PieceAppearance,
+  RendererAssetEntity,
   RendererAssetProvider,
   SpaceAppearance,
 } from "../presentation/index.js";
@@ -57,3 +63,16 @@ export type ThreeBoardAsset =
   | ThreeSpaceVisualAsset;
 
 export type ThreeBoardAssetProvider = RendererAssetProvider<ThreeBoardAsset>;
+
+export function resolveThreeAppearanceAssetKind(
+  entity: RendererAssetEntity,
+  appearance: Pick<AppearanceVisual, "assetKind">,
+): RendererAssetKind {
+  if (appearance.assetKind === AppearanceAssetKind.Model) {
+    return RendererAssetKind.Model;
+  }
+
+  return entity === "piece"
+    ? RendererAssetKind.PieceVisual
+    : RendererAssetKind.SpaceVisual;
+}

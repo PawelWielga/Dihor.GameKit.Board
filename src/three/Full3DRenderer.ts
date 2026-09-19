@@ -40,6 +40,7 @@ import {
   applyThreeAppearanceTransform,
   resolveThreeAppearanceTransform,
 } from "./appearanceMapping.js";
+import { resolveThreeAppearanceAssetKind } from "./assets.js";
 import type {
   ThreeBoardAsset,
   ThreeBoardAssetProvider,
@@ -433,20 +434,29 @@ export class Full3DRenderer implements BoardRenderer<HTMLCanvasElement> {
     spaceId: SpaceId,
     appearance: SpaceAppearance,
   ): Object3D | undefined {
-    const asset = appearance.assetKey
-      ? this.#asset(
-          appearance.assetKey,
-          RendererAssetKind.SpaceVisual,
-          "space",
-        )
-      : undefined;
-
-    if (asset?.type === "space-visual") {
-      return asset.create({ spaceId, appearance });
+    if (!appearance.assetKey) {
+      return undefined;
     }
 
-    if (asset?.type === "model") {
+    const assetKind = resolveThreeAppearanceAssetKind("space", appearance);
+    const asset = this.#asset(
+      appearance.assetKey,
+      assetKind,
+      "space",
+    );
+
+    if (
+      assetKind === RendererAssetKind.Model &&
+      asset?.type === "model"
+    ) {
       return asset.create();
+    }
+
+    if (
+      assetKind === RendererAssetKind.SpaceVisual &&
+      asset?.type === "space-visual"
+    ) {
+      return asset.create({ spaceId, appearance });
     }
 
     return undefined;
@@ -457,18 +467,25 @@ export class Full3DRenderer implements BoardRenderer<HTMLCanvasElement> {
     appearance: PieceAppearance | undefined,
   ): Object3D {
     if (appearance?.assetKey) {
+      const assetKind = resolveThreeAppearanceAssetKind("piece", appearance);
       const asset = this.#asset(
         appearance.assetKey,
-        RendererAssetKind.PieceVisual,
+        assetKind,
         "piece",
       );
 
-      if (asset?.type === "piece-visual") {
-        return asset.create({ pieceId, appearance });
+      if (
+        assetKind === RendererAssetKind.Model &&
+        asset?.type === "model"
+      ) {
+        return asset.create();
       }
 
-      if (asset?.type === "model") {
-        return asset.create();
+      if (
+        assetKind === RendererAssetKind.PieceVisual &&
+        asset?.type === "piece-visual"
+      ) {
+        return asset.create({ pieceId, appearance });
       }
     }
 

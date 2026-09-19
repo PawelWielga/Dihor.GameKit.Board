@@ -44,6 +44,7 @@ import {
   applyThreeAppearanceTransform,
   resolveThreeAppearanceTransform,
 } from "./appearanceMapping.js";
+import { resolveThreeAppearanceAssetKind } from "./assets.js";
 import type {
   ThreeBoardAsset,
   ThreeBoardAssetProvider,
@@ -449,18 +450,25 @@ implements BoardRenderer<HTMLCanvasElement> {
     appearance: PieceAppearance | undefined,
   ): Object3D {
     if (appearance?.assetKey) {
+      const assetKind = resolveThreeAppearanceAssetKind("piece", appearance);
       const asset = this.#asset(
         appearance.assetKey,
-        RendererAssetKind.PieceVisual,
+        assetKind,
         "piece",
       );
 
-      if (asset?.type === "piece-visual") {
-        return asset.create({ pieceId, appearance });
+      if (
+        assetKind === RendererAssetKind.Model &&
+        asset?.type === "model"
+      ) {
+        return asset.create();
       }
 
-      if (asset?.type === "model") {
-        return asset.create();
+      if (
+        assetKind === RendererAssetKind.PieceVisual &&
+        asset?.type === "piece-visual"
+      ) {
+        return asset.create({ pieceId, appearance });
       }
     }
 
