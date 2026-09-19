@@ -59,6 +59,7 @@ export type {
 } from "./events/index.js";
 
 export {
+  AppearanceAssetKind,
   AppearanceState,
   BoardRenderMode,
   createExplicitSpaceLayout,
