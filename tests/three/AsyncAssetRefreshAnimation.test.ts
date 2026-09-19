@@ -225,7 +225,6 @@ describe("async renderer asset refresh during movement", () => {
 
       await renderer.dispose();
     });
-  }
 
     it(`${rendererCase.name} defers a settled space texture until movement completes`, async () => {
       let resolveLoad!: (
@@ -309,4 +308,5 @@ describe("async renderer asset refresh during movement", () => {
       await renderer.dispose();
       texture.dispose();
     });
+  }
 });
