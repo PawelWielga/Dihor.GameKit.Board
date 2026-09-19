@@ -322,9 +322,15 @@ renderer.render(canvas, {
 
 Async provider results are cached. The renderer initially uses its built-in
 visual when a custom asset is still loading and refreshes the presentation when
-the resource settles. Animation continues to consume only the authoritative
-`MovementPath`; appearance transforms are visual offsets relative to each
-logical path anchor.
+the resource settles. If an asset settles while `animateMovement()` is active,
+that target defers the asset refresh until the authoritative movement path has
+finished. The resolved asset is then rendered immediately after the final
+animation segment. Starting another movement, explicitly rendering again or
+disposing/replacing the target can still cancel the previous presentation
+animation.
+
+Animation continues to consume only the authoritative `MovementPath`;
+appearance transforms are visual offsets relative to each logical path anchor.
 
 ## Presentation-only state
 
