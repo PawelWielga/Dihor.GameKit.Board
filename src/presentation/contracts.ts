@@ -65,5 +65,5 @@ export interface BoardRenderer<
     target: TTarget,
     input: BoardRenderInput<TSpaceData, TPieceData>,
   ): void;
-  dispose?(): void;
+  dispose?(): void | Promise<void>;
 }
