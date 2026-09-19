@@ -100,10 +100,7 @@ export class RendererAssetCache<TResource> {
     const key = getCacheKey(request);
     const existing = this.#entries.get(key);
     if (existing) {
-      return {
-        current: existing.current,
-        ready: existing.ready,
-      };
+      return createHandle(existing);
     }
 
     const entry: RendererAssetCacheEntry<TResource> = {
@@ -124,10 +121,7 @@ export class RendererAssetCache<TResource> {
         return snapshot;
       });
 
-    return {
-      current: entry.current,
-      ready: entry.ready,
-    };
+    return createHandle(entry);
   }
 
   public peek(
@@ -241,4 +235,15 @@ function validateRequest(request: RendererAssetRequest): void {
   if (request.cacheKey !== undefined && request.cacheKey.trim().length === 0) {
     throw new RangeError("Renderer asset cacheKey must not be empty.");
   }
+}
+
+function createHandle<TResource>(
+  entry: RendererAssetCacheEntry<TResource>,
+): RendererAssetHandle<TResource> {
+  return {
+    get current() {
+      return entry.current;
+    },
+    ready: entry.ready,
+  };
 }
