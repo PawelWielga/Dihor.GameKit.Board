@@ -252,7 +252,6 @@ describe("async renderer asset refresh during movement", () => {
       const input = {
         ...scenario.input,
         appearance: {
-          ...scenario.input.appearance,
           spaces: {
             a: {
               appearance: {
