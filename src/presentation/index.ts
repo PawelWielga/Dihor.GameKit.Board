@@ -1,4 +1,5 @@
 export {
+  AppearanceAssetKind,
   AppearanceState,
   DEFAULT_PIECE_APPEARANCE,
   DEFAULT_SPACE_APPEARANCE,
@@ -6,6 +7,7 @@ export {
   resolveSpaceAppearance,
 } from "./appearance.js";
 export type {
+  AppearanceAssetKind,
   AppearanceAssignment,
   AppearanceDefinition,
   AppearanceLabel,
