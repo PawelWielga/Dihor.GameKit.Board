@@ -84,6 +84,8 @@ interface HybridContext {
   readonly groundBySpace: Map<SpaceId, Vector3>;
   lastInput?: BoardRenderInput;
   animationToken: number;
+  activeAnimationToken?: number;
+  assetRefreshPending: boolean;
   width: number;
   height: number;
 }
@@ -141,54 +143,60 @@ implements BoardRenderer<HTMLCanvasElement> {
       return;
     }
 
+    const path = movement.path;
+    if (path.length <= 1 || typeof requestAnimationFrame !== "function") {
+      return;
+    }
+
     const duration = positive(
       options.durationPerStepMs ?? 220,
       "durationPerStepMs",
     );
     const token = ++context.animationToken;
-    const path = movement.path;
+    context.activeAnimationToken = token;
+
     const visualOffset = context.pieceOffsets.get(movement.pieceId) ??
       new Vector3();
-
-    if (path.length <= 1 || typeof requestAnimationFrame !== "function") {
-      return;
-    }
-
     const startSpaceId = path[0];
     const start = startSpaceId === undefined
       ? undefined
       : context.groundBySpace.get(startSpaceId);
-    if (start) {
-      piece.position.copy(start).add(visualOffset);
-      this.#renderContext(context);
-    }
 
-    for (let index = 0; index < path.length - 1; index += 1) {
-      if (context.animationToken !== token) {
-        return;
+    try {
+      if (start) {
+        piece.position.copy(start).add(visualOffset);
+        this.#renderContext(context);
       }
 
-      const fromId = path[index];
-      const toId = path[index + 1];
-      if (fromId === undefined || toId === undefined) {
-        continue;
-      }
+      for (let index = 0; index < path.length - 1; index += 1) {
+        if (context.animationToken !== token) {
+          return;
+        }
 
-      const from = context.groundBySpace.get(fromId);
-      const to = context.groundBySpace.get(toId);
-      if (!from || !to) {
-        continue;
-      }
+        const fromId = path[index];
+        const toId = path[index + 1];
+        if (fromId === undefined || toId === undefined) {
+          continue;
+        }
 
-      await this.#animateSegment(
-        context,
-        piece,
-        from,
-        to,
-        visualOffset,
-        duration,
-        token,
-      );
+        const from = context.groundBySpace.get(fromId);
+        const to = context.groundBySpace.get(toId);
+        if (!from || !to) {
+          continue;
+        }
+
+        await this.#animateSegment(
+          context,
+          piece,
+          from,
+          to,
+          visualOffset,
+          duration,
+          token,
+        );
+      }
+    } finally {
+      this.#finishMovementAnimation(target, context, token);
     }
   }
 
@@ -254,6 +262,7 @@ implements BoardRenderer<HTMLCanvasElement> {
       pieceOffsets: new Map(),
       groundBySpace: new Map(),
       animationToken: 0,
+      assetRefreshPending: false,
       width: 0,
       height: 0,
     };
@@ -268,6 +277,8 @@ implements BoardRenderer<HTMLCanvasElement> {
     input: BoardRenderInput,
   ): void {
     context.animationToken += 1;
+    context.activeAnimationToken = undefined;
+    context.assetRefreshPending = false;
     context.lastInput = input;
     disposeScene(context.boardScene);
     disposeScene(context.pieceScene);
@@ -533,6 +544,11 @@ implements BoardRenderer<HTMLCanvasElement> {
           continue;
         }
 
+        if (context.activeAnimationToken !== undefined) {
+          context.assetRefreshPending = true;
+          continue;
+        }
+
         try {
           this.render(target, input);
         } catch {
@@ -540,6 +556,36 @@ implements BoardRenderer<HTMLCanvasElement> {
         }
       }
     });
+  }
+
+  #finishMovementAnimation(
+    target: HTMLCanvasElement,
+    context: HybridContext,
+    token: number,
+  ): void {
+    if (
+      this.#contexts.get(target) !== context ||
+      context.activeAnimationToken !== token
+    ) {
+      return;
+    }
+
+    context.activeAnimationToken = undefined;
+    if (!context.assetRefreshPending) {
+      return;
+    }
+
+    context.assetRefreshPending = false;
+    const input = context.lastInput;
+    if (!input) {
+      return;
+    }
+
+    try {
+      this.render(target, input);
+    } catch {
+      // Keep the final animated frame if the refreshed asset cannot render.
+    }
   }
 
   #renderContext(context: HybridContext): void {
