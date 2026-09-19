@@ -201,12 +201,12 @@ export class Full3DRenderer implements BoardRenderer<HTMLCanvasElement> {
     this.#contexts.delete(target);
   }
 
-  public dispose(): void {
+  public async dispose(): Promise<void> {
     for (const target of [...this.#contexts.keys()]) {
       this.disposeTarget(target);
     }
 
-    void this.#assetCache?.dispose();
+    await this.#assetCache?.dispose();
   }
 
   #ensureContext(target: HTMLCanvasElement): Full3DContext {

@@ -1498,8 +1498,17 @@ window.addEventListener(
   () => {
     resizeObserver?.disconnect();
     window.removeEventListener("resize", rerenderActiveRendererAfterResize);
-    hybridRenderer.dispose();
-    full3dRenderer.dispose();
+
+    void Promise.allSettled([
+      hybridRenderer.dispose(),
+      full3dRenderer.dispose(),
+    ]).then((results) => {
+      for (const result of results) {
+        if (result.status === "rejected") {
+          console.warn("Renderer cleanup failed during page teardown.", result.reason);
+        }
+      }
+    });
   },
   { once: true },
 );

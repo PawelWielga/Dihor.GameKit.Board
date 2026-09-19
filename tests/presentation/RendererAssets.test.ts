@@ -164,6 +164,75 @@ describe("RendererAssetCache", () => {
     );
   });
 
+  it("awaits async resource cleanup before provider cleanup and shares repeated disposal", async () => {
+    let releaseResource!: () => void;
+    const resourceGate = new Promise<void>((resolve) => {
+      releaseResource = resolve;
+    });
+    const sequence: string[] = [];
+    const disposeResource = vi.fn(async () => {
+      sequence.push("resource:start");
+      await resourceGate;
+      sequence.push("resource:end");
+    });
+    const disposeProvider = vi.fn(async () => {
+      sequence.push("provider");
+    });
+    const cache = new RendererAssetCache<FakeResource>({
+      load: async () => ({
+        resource: { id: "owned" },
+        dispose: disposeResource,
+      }),
+      dispose: disposeProvider,
+    });
+
+    await cache.request({
+      key: "owned",
+      kind: RendererAssetKind.Model,
+    }).ready;
+
+    const firstDispose = cache.dispose();
+    const secondDispose = cache.dispose();
+
+    expect(secondDispose).toBe(firstDispose);
+    await vi.waitFor(() => {
+      expect(disposeResource).toHaveBeenCalledTimes(1);
+    });
+    expect(sequence).toEqual(["resource:start"]);
+    expect(disposeProvider).not.toHaveBeenCalled();
+
+    releaseResource();
+    await Promise.all([firstDispose, secondDispose]);
+
+    expect(sequence).toEqual(["resource:start", "resource:end", "provider"]);
+    expect(disposeProvider).toHaveBeenCalledTimes(1);
+  });
+
+  it("still disposes the provider and propagates async cleanup failures", async () => {
+    const resourceError = new Error("resource cleanup failed");
+    const disposeProvider = vi.fn(async () => undefined);
+    const cache = new RendererAssetCache<FakeResource>({
+      load: async () => ({
+        resource: { id: "broken-owned" },
+        dispose: async () => {
+          throw resourceError;
+        },
+      }),
+      dispose: disposeProvider,
+    });
+
+    await cache.request({
+      key: "broken-owned",
+      kind: RendererAssetKind.Model,
+    }).ready;
+
+    const disposal = cache.dispose();
+    await expect(disposal).rejects.toBe(resourceError);
+    expect(disposeProvider).toHaveBeenCalledTimes(1);
+    await expect(cache.dispose()).rejects.toBe(resourceError);
+    expect(disposeProvider).toHaveBeenCalledTimes(1);
+  });
+
   it("allows explicit cache keys while rejecting empty identifiers", async () => {
     const load = vi.fn(async () => ({
       resource: { id: "shared" },

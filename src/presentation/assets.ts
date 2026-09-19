@@ -84,6 +84,7 @@ export class RendererAssetCache<TResource> {
   readonly #options: RendererAssetCacheOptions<TResource>;
   readonly #entries = new Map<string, RendererAssetCacheEntry<TResource>>();
   #disposed = false;
+  #disposePromise?: Promise<void>;
 
   public constructor(
     provider: RendererAssetProvider<TResource>,
@@ -136,22 +137,46 @@ export class RendererAssetCache<TResource> {
     return this.#entries.has(getCacheKey(request));
   }
 
-  public async dispose(): Promise<void> {
-    if (this.#disposed) {
-      return;
+  public dispose(): Promise<void> {
+    if (this.#disposePromise) {
+      return this.#disposePromise;
     }
 
     this.#disposed = true;
+    this.#disposePromise = this.#disposeEntriesAndProvider();
+    return this.#disposePromise;
+  }
+
+  async #disposeEntriesAndProvider(): Promise<void> {
     const entries = [...this.#entries.values()];
     await Promise.allSettled(entries.map((entry) => entry.ready));
 
+    const errors: unknown[] = [];
     for (const entry of entries) {
-      await entry.owned?.dispose?.();
-      entry.owned = undefined;
+      try {
+        await entry.owned?.dispose?.();
+      } catch (error) {
+        errors.push(error);
+      } finally {
+        entry.owned = undefined;
+      }
     }
 
     this.#entries.clear();
-    await this.#provider.dispose?.();
+
+    try {
+      await this.#provider.dispose?.();
+    } catch (error) {
+      errors.push(error);
+    }
+
+    if (errors.length === 1) {
+      throw errors[0];
+    }
+
+    if (errors.length > 1) {
+      throw new AggregateError(errors, "Renderer asset cleanup failed.");
+    }
   }
 
   async #resolve(
