@@ -53,10 +53,12 @@ describe("RendererAssetCache", () => {
       status: "ready",
       resource: { id: "hero-model" },
     });
-    expect(cache.peek(request)).toEqual({
+    expect(first.current).toEqual({
       status: "ready",
       resource: { id: "hero-model" },
     });
+    expect(second.current).toEqual(first.current);
+    expect(cache.peek(request)).toEqual(first.current);
   });
 
   it("uses fallback resources for missing and failed provider assets", async () => {
@@ -75,25 +77,30 @@ describe("RendererAssetCache", () => {
       }),
     });
 
-    await expect(
-      cache.request({
-        key: "missing",
-        kind: RendererAssetKind.Texture,
-      }).ready,
-    ).resolves.toEqual({
+    const missingRequest = {
+      key: "missing",
+      kind: RendererAssetKind.Texture,
+    };
+    const missing = cache.request(missingRequest);
+
+    await expect(missing.ready).resolves.toEqual({
       status: "fallback",
       resource: { id: "fallback:missing" },
       error: undefined,
     });
+    expect(missing.current).toEqual(cache.peek(missingRequest));
 
-    const failed = await cache.request({
+    const failedRequest = {
       key: "broken",
       kind: RendererAssetKind.Model,
-    }).ready;
+    };
+    const failed = cache.request(failedRequest);
+    await failed.ready;
 
-    expect(failed.status).toBe("fallback");
-    expect(failed.resource).toEqual({ id: "fallback:broken" });
-    expect(failed.error).toEqual(expect.any(Error));
+    expect(failed.current.status).toBe("fallback");
+    expect(failed.current.resource).toEqual({ id: "fallback:broken" });
+    expect(failed.current.error).toEqual(expect.any(Error));
+    expect(failed.current).toEqual(cache.peek(failedRequest));
   });
 
   it("reports missing and error states when no fallback exists", async () => {
@@ -108,20 +115,25 @@ describe("RendererAssetCache", () => {
     };
     const cache = new RendererAssetCache(provider);
 
-    await expect(
-      cache.request({
-        key: "missing",
-        kind: RendererAssetKind.Image,
-      }).ready,
-    ).resolves.toEqual({ status: "missing" });
+    const missingRequest = {
+      key: "missing",
+      kind: RendererAssetKind.Image,
+    };
+    const missing = cache.request(missingRequest);
+    await expect(missing.ready).resolves.toEqual({ status: "missing" });
+    expect(missing.current).toEqual({ status: "missing" });
+    expect(missing.current).toEqual(cache.peek(missingRequest));
 
-    const failed = await cache.request({
+    const failedRequest = {
       key: "bad",
       kind: RendererAssetKind.Image,
-    }).ready;
+    };
+    const failed = cache.request(failedRequest);
+    await failed.ready;
 
-    expect(failed.status).toBe("error");
-    expect(failed.error).toEqual(expect.any(TypeError));
+    expect(failed.current.status).toBe("error");
+    expect(failed.current.error).toEqual(expect.any(TypeError));
+    expect(failed.current).toEqual(cache.peek(failedRequest));
   });
 
   it("disposes cached resources and the provider exactly once", async () => {
