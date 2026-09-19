@@ -29,6 +29,7 @@ import {
   type Full3DCameraOptions,
   type ThreeBoardAssetProvider,
 } from "@dihor/gamekit-board/three";
+import { RendererTargetLifecycle } from "./rendererTargetLifecycle.js";
 import {
   ConeGeometry,
   CylinderGeometry,
@@ -257,6 +258,7 @@ const full3dRenderer = new Full3DRenderer({
   pixelRatio: Math.min(window.devicePixelRatio || 1, 2),
   assetProvider: demoAssetProvider,
 });
+const webglTargetLifecycle = new RendererTargetLifecycle<HTMLCanvasElement>();
 
 const blockedDestinationRule: MovementRule = ({ toSpace }) => {
   const blockedSpaceId = blockedSpaceInput.value.trim();
@@ -899,6 +901,7 @@ function tryRenderHybridBoard(): boolean {
       appearance: activeAppearance,
       ...(lastMovement ? { movement: lastMovement } : {}),
     });
+    webglTargetLifecycle.activate(hybridRenderer, canvas);
     hybridCanvas = canvas;
     usingHybridRenderer = true;
     return true;
@@ -929,6 +932,7 @@ function tryRenderFull3DBoard(): boolean {
       appearance: activeAppearance,
       ...(lastMovement ? { movement: lastMovement } : {}),
     });
+    webglTargetLifecycle.activate(full3dRenderer, canvas);
     full3dCanvas = canvas;
     usingFull3DRenderer = true;
     return true;
@@ -948,11 +952,13 @@ function tryRenderFull3DBoard(): boolean {
 function renderBoard(): void {
   activeAppearance = createDemoAppearanceConfig();
   spaceElements = new Map();
-  boardStage.replaceChildren();
+
+  webglTargetLifecycle.disposeActive();
   hybridCanvas = undefined;
   full3dCanvas = undefined;
   usingHybridRenderer = false;
   usingFull3DRenderer = false;
+  boardStage.replaceChildren();
 
   if (
     selectedRenderMode === BoardRenderMode.FlatBoard3DPieces &&
@@ -1498,6 +1504,7 @@ window.addEventListener(
   () => {
     resizeObserver?.disconnect();
     window.removeEventListener("resize", rerenderActiveRendererAfterResize);
+    webglTargetLifecycle.disposeActive();
 
     void Promise.allSettled([
       hybridRenderer.dispose(),
