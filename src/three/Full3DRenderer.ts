@@ -79,6 +79,8 @@ interface Full3DContext {
   readonly pointBySpace: Map<SpaceId, Vector3>;
   lastInput?: BoardRenderInput;
   animationToken: number;
+  activeAnimationToken?: number;
+  assetRefreshPending: boolean;
 }
 
 export class Full3DRenderer implements BoardRenderer<HTMLCanvasElement> {
@@ -149,44 +151,50 @@ export class Full3DRenderer implements BoardRenderer<HTMLCanvasElement> {
       "durationPerStepMs",
     );
     const token = ++context.animationToken;
+    context.activeAnimationToken = token;
+
     const visualOffset = context.pieceOffsets.get(movement.pieceId) ??
       new Vector3();
     const start = path[0] === undefined
       ? undefined
       : context.pointBySpace.get(path[0]);
 
-    if (start) {
-      piece.position.copy(start).add(visualOffset);
-      context.renderer.render(context.scene, context.camera);
-    }
-
-    for (let index = 0; index < path.length - 1; index += 1) {
-      if (context.animationToken !== token) {
-        return;
+    try {
+      if (start) {
+        piece.position.copy(start).add(visualOffset);
+        context.renderer.render(context.scene, context.camera);
       }
 
-      const fromId = path[index];
-      const toId = path[index + 1];
-      const from = fromId === undefined
-        ? undefined
-        : context.pointBySpace.get(fromId);
-      const to = toId === undefined
-        ? undefined
-        : context.pointBySpace.get(toId);
+      for (let index = 0; index < path.length - 1; index += 1) {
+        if (context.animationToken !== token) {
+          return;
+        }
 
-      if (!from || !to) {
-        continue;
+        const fromId = path[index];
+        const toId = path[index + 1];
+        const from = fromId === undefined
+          ? undefined
+          : context.pointBySpace.get(fromId);
+        const to = toId === undefined
+          ? undefined
+          : context.pointBySpace.get(toId);
+
+        if (!from || !to) {
+          continue;
+        }
+
+        await this.#animateSegment(
+          context,
+          piece,
+          from,
+          to,
+          visualOffset,
+          duration,
+          token,
+        );
       }
-
-      await this.#animateSegment(
-        context,
-        piece,
-        from,
-        to,
-        visualOffset,
-        duration,
-        token,
-      );
+    } finally {
+      this.#finishMovementAnimation(target, context, token);
     }
   }
 
@@ -242,6 +250,7 @@ export class Full3DRenderer implements BoardRenderer<HTMLCanvasElement> {
       pieceOffsets: new Map(),
       pointBySpace: new Map(),
       animationToken: 0,
+      assetRefreshPending: false,
     };
     this.#contexts.set(target, context);
     return context;
@@ -253,6 +262,8 @@ export class Full3DRenderer implements BoardRenderer<HTMLCanvasElement> {
     input: BoardRenderInput,
   ): void {
     context.animationToken += 1;
+    context.activeAnimationToken = undefined;
+    context.assetRefreshPending = false;
     context.lastInput = input;
     disposeScene(context.scene);
     context.pieceGroups.clear();
@@ -550,6 +561,11 @@ export class Full3DRenderer implements BoardRenderer<HTMLCanvasElement> {
           continue;
         }
 
+        if (context.activeAnimationToken !== undefined) {
+          context.assetRefreshPending = true;
+          continue;
+        }
+
         try {
           this.render(target, input);
         } catch {
@@ -557,6 +573,36 @@ export class Full3DRenderer implements BoardRenderer<HTMLCanvasElement> {
         }
       }
     });
+  }
+
+  #finishMovementAnimation(
+    target: HTMLCanvasElement,
+    context: Full3DContext,
+    token: number,
+  ): void {
+    if (
+      this.#contexts.get(target) !== context ||
+      context.activeAnimationToken !== token
+    ) {
+      return;
+    }
+
+    context.activeAnimationToken = undefined;
+    if (!context.assetRefreshPending) {
+      return;
+    }
+
+    context.assetRefreshPending = false;
+    const input = context.lastInput;
+    if (!input) {
+      return;
+    }
+
+    try {
+      this.render(target, input);
+    } catch {
+      // Keep the final animated frame if the refreshed asset cannot render.
+    }
   }
 
   #animateSegment(
