@@ -7,7 +7,6 @@ export {
   resolveSpaceAppearance,
 } from "./appearance.js";
 export type {
-  AppearanceAssetKind,
   AppearanceAssignment,
   AppearanceDefinition,
   AppearanceLabel,
