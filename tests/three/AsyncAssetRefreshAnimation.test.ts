@@ -41,7 +41,7 @@ vi.mock("three", async (importOriginal) => {
   };
 });
 
-import { Object3D } from "three";
+import { Object3D, Texture } from "three";
 import {
   Board,
   createLinearSpaceLayout,
@@ -92,13 +92,14 @@ function createScenario(): {
   };
   readonly movement: ReturnType<Board["moveBy"]>;
 } {
-  const topology = new LinearTopology(["a", "b"]);
+  const topology = new LinearTopology(["a", "b", "c"]);
   const board = new Board({ topology });
   board.addSpace({ id: "a" });
   board.addSpace({ id: "b" });
+  board.addSpace({ id: "c" });
   board.addPiece({ id: "pawn" }, "a");
 
-  const movement = board.moveBy("pawn", 1);
+  const movement = board.moveBy("pawn", 2);
   const appearance: BoardAppearanceConfig = {
     pieces: {
       pawn: {
@@ -198,12 +199,23 @@ describe("async renderer asset refresh during movement", () => {
       expect(renderSpy).toHaveBeenCalledTimes(renderCountDuringAnimation);
       expect(animationFrames).toHaveLength(1);
 
-      const frame = animationFrames.shift();
-      if (!frame) {
-        throw new Error("Expected a queued animation frame.");
+      const firstFrame = animationFrames.shift();
+      if (!firstFrame) {
+        throw new Error("Expected the first queued animation frame.");
       }
 
-      frame(Number.MAX_SAFE_INTEGER);
+      firstFrame(Number.MAX_SAFE_INTEGER);
+      await flushMicrotasks();
+
+      expect(animationFrames).toHaveLength(1);
+      expect(createVisual).not.toHaveBeenCalled();
+
+      const secondFrame = animationFrames.shift();
+      if (!secondFrame) {
+        throw new Error("Expected the second queued animation frame.");
+      }
+
+      secondFrame(Number.MAX_SAFE_INTEGER);
       await animation;
 
       expect(createVisual).toHaveBeenCalledTimes(1);
@@ -214,4 +226,87 @@ describe("async renderer asset refresh during movement", () => {
       await renderer.dispose();
     });
   }
+
+    it(`${rendererCase.name} defers a settled space texture until movement completes`, async () => {
+      let resolveLoad!: (
+        value: RendererAssetLoadResult<ThreeBoardAsset> | undefined,
+      ) => void;
+      const texture = new Texture();
+      const provider: ThreeBoardAssetProvider = {
+        load: vi.fn(
+          () =>
+            new Promise<RendererAssetLoadResult<ThreeBoardAsset> | undefined>(
+              (resolve) => {
+                resolveLoad = resolve;
+              },
+            ),
+        ),
+      };
+      const renderer = rendererCase.create(provider);
+      const canvas = {
+        clientWidth: 800,
+        clientHeight: 500,
+        width: 800,
+        height: 500,
+      } as HTMLCanvasElement;
+      const scenario = createScenario();
+      const input = {
+        ...scenario.input,
+        appearance: {
+          ...scenario.input.appearance,
+          spaces: {
+            a: {
+              appearance: {
+                texture: "space.async",
+              },
+            },
+          },
+        },
+      };
+
+      const animation = renderer.animateMovement(
+        canvas,
+        input,
+        scenario.movement,
+        { durationPerStepMs: 100 },
+      );
+
+      await flushMicrotasks();
+      expect(animationFrames).toHaveLength(1);
+
+      const renderSpy = webglMocks.renderSpies.at(-1);
+      if (!renderSpy) {
+        throw new Error("Expected a WebGL renderer instance.");
+      }
+
+      const renderCountDuringAnimation = renderSpy.mock.calls.length;
+
+      resolveLoad({
+        resource: {
+          type: "texture",
+          texture,
+        },
+      });
+      await flushMicrotasks();
+
+      expect(renderSpy).toHaveBeenCalledTimes(renderCountDuringAnimation);
+
+      for (let step = 0; step < 2; step += 1) {
+        const frame = animationFrames.shift();
+        if (!frame) {
+          throw new Error(`Expected animation frame for movement step ${step + 1}.`);
+        }
+
+        frame(Number.MAX_SAFE_INTEGER);
+        await flushMicrotasks();
+      }
+
+      await animation;
+      expect(renderSpy.mock.calls.length).toBeGreaterThan(
+        renderCountDuringAnimation,
+      );
+
+      await renderer.dispose();
+      texture.dispose();
+    });
 });
