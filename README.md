@@ -180,6 +180,12 @@ npm package naming follows the same convention:
 @dihor/gamekit-board
 ```
 
+## Development workflow
+
+Ongoing work is integrated on `dev`; `main` is the release branch. After every release merge, synchronize the resulting `main` history back into `dev` so the branches do not diverge.
+
+See [docs/branch-workflow.md](docs/branch-workflow.md) for the release and synchronization rules.
+
 ## Status
 
 Early development. The initial public API is not stable yet.
