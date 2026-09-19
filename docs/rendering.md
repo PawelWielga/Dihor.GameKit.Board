@@ -67,6 +67,16 @@ whether the move is legal.
 an HTML element, canvas, Three.js scene, Flutter bridge or any other target
 without adding that technology to the domain core.
 
+A renderer may expose asynchronous cleanup through `dispose(): void | Promise<void>`.
+Consumers that own a renderer should await the returned promise when possible.
+Three.js renderers wait for renderer-owned asset resources and the asset provider
+to finish cleanup before disposal completes. Repeated disposal is idempotent,
+and cleanup failures are propagated to the caller instead of being detached.
+
+```ts
+await renderer.dispose?.();
+```
+
 ## External appearance configuration
 
 Space and piece visuals are configured outside the authoritative board. A
@@ -165,7 +175,10 @@ adapters:
 - missing or failed loads can resolve to a configured fallback,
 - `peek()` exposes the current loading/ready/fallback/error state,
 - `dispose()` waits for active loads, disposes owned cached resources once and
-  then disposes the provider.
+  then disposes the provider,
+- concurrent or repeated `dispose()` calls share the same cleanup lifecycle,
+- cleanup attempts continue through all owned resources and the provider, while
+  failures are surfaced to the caller.
 
 By default the cache identity is `kind:key`. A provider may use an explicit
 `cacheKey` when several logical entities should share one renderer resource.
