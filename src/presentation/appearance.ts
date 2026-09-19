@@ -18,6 +18,14 @@ export const AppearanceState = Object.freeze({
 export type AppearanceState =
   (typeof AppearanceState)[keyof typeof AppearanceState];
 
+export const AppearanceAssetKind = Object.freeze({
+  Visual: "visual",
+  Model: "model",
+} as const);
+
+export type AppearanceAssetKind =
+  (typeof AppearanceAssetKind)[keyof typeof AppearanceAssetKind];
+
 export interface AppearanceLabel {
   readonly text?: string;
   readonly color?: string;
@@ -32,6 +40,7 @@ export interface AppearanceVisual {
   readonly texture?: string;
   readonly material?: string;
   readonly assetKey?: string;
+  readonly assetKind?: AppearanceAssetKind;
   readonly scale?: number | PresentationPoint3;
   readonly rotation?: number | PresentationPoint3;
   readonly offset?: PresentationPoint3;
