@@ -1,6 +1,6 @@
 {
   "name": "@dihor/gamekit-board",
-  "version": "0.1.0-preview.0",
+  "version": "0.1.0-preview.1",
   "description": "Reusable framework-agnostic board topology and piece movement toolkit for games and applications.",
   "type": "module",
   "sideEffects": false,

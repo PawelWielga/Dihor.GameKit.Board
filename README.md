@@ -180,6 +180,18 @@ npm package naming follows the same convention:
 @dihor/gamekit-board
 ```
 
+## Prerelease package
+
+The first consumable prerelease is distributed as an npm-compatible GitHub Release asset:
+
+```text
+@dihor/gamekit-board 0.1.0-preview.1
+tag: v0.1.0-preview.1
+asset: dihor-gamekit-board-0.1.0-preview.1.tgz
+```
+
+Downstream projects can pin the release artifact directly from GitHub. The prerelease workflow validates typechecking, tests, the library build, demo build, package contents and SHA-256 checksum before publication.
+
 ## Status
 
 Early development. The initial public API is not stable yet.
