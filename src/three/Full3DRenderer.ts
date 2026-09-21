@@ -40,7 +40,11 @@ import {
   applyThreeAppearanceTransform,
   resolveThreeAppearanceTransform,
 } from "./appearanceMapping.js";
-import { resolveThreeAppearanceAssetKind } from "./assets.js";\nimport {\n  createPieceLabelSprite,\n  disposeRendererOwnedLabelTexture,\n} from "./pieceLabel.js";
+import { resolveThreeAppearanceAssetKind } from "./assets.js";
+import {
+  createPieceLabelSprite,
+  disposeRendererOwnedLabelTexture,
+} from "./pieceLabel.js";
 import type {
   ThreeBoardAsset,
   ThreeBoardAssetProvider,
