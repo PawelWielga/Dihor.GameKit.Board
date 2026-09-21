@@ -846,32 +846,19 @@ function renderGraph(surface: HTMLElement): void {
   svg.setAttribute("viewBox", "0 0 1000 600");
   svg.setAttribute("aria-hidden", "true");
 
-  const drawn = new Set<string>();
-  for (const fromSpaceId of spaceIds) {
-    for (const toSpaceId of topology.getNeighbors(fromSpaceId)) {
-      const reverse = topology.getNeighbors(toSpaceId).includes(fromSpaceId);
-      const edgeKey = reverse
-        ? [fromSpaceId, toSpaceId].sort().join("\u0000")
-        : `${fromSpaceId}->${toSpaceId}`;
-
-      if (drawn.has(edgeKey)) {
-        continue;
-      }
-
-      drawn.add(edgeKey);
-      const from = positions.get(fromSpaceId);
-      const to = positions.get(toSpaceId);
-      if (!from || !to) {
-        continue;
-      }
-
-      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-      line.setAttribute("x1", String(from.x));
-      line.setAttribute("y1", String(from.y));
-      line.setAttribute("x2", String(to.x));
-      line.setAttribute("y2", String(to.y));
-      svg.append(line);
+  for (const connection of createTopologyConnections(topology)) {
+    const from = positions.get(connection.fromSpaceId);
+    const to = positions.get(connection.toSpaceId);
+    if (!from || !to) {
+      continue;
     }
+
+    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    line.setAttribute("x1", String(from.x));
+    line.setAttribute("y1", String(from.y));
+    line.setAttribute("x2", String(to.x));
+    line.setAttribute("y2", String(to.y));
+    svg.append(line);
   }
 
   surface.append(svg);
@@ -932,6 +919,7 @@ function tryRenderFull3DBoard(): boolean {
       snapshot: board.snapshot(),
       layout: createPresentationLayout(),
       appearance: activeAppearance,
+      connections: createTopologyConnections(topology),
       ...(lastMovement ? { movement: lastMovement } : {}),
     });
     webglTargetLifecycle.activate(full3dRenderer, canvas);
