@@ -1,3 +1,51 @@
+export {
+  createTopologyConnections,
+  DEFAULT_CONNECTION_APPEARANCE,
+  mapConnectionsToPresentation,
+  resolveConnectionAppearance,
+} from "./connections.js";
+export type {
+  BoardConnectionAppearance,
+  BoardConnectionPresentation,
+  BoardConnectionSegment,
+} from "./connections.js";
+export {
+  AppearanceAssetKind,
+  AppearanceState,
+  DEFAULT_PIECE_APPEARANCE,
+  DEFAULT_SPACE_APPEARANCE,
+  resolvePieceAppearance,
+  resolveSpaceAppearance,
+} from "./appearance.js";
+export type {
+  AppearanceAssignment,
+  AppearanceDefinition,
+  AppearanceLabel,
+  AppearanceVisual,
+  BoardAppearanceConfig,
+  BoardAppearanceTheme,
+  PieceAppearance,
+  PieceAppearanceResolver,
+  PieceAppearanceResolverContext,
+  PresentationEntityState,
+  SpaceAppearance,
+  SpaceAppearanceResolver,
+  SpaceAppearanceResolverContext,
+} from "./appearance.js";
+export {
+  RendererAssetCache,
+  RendererAssetKind,
+} from "./assets.js";
+export type {
+  RendererAssetCacheOptions,
+  RendererAssetEntity,
+  RendererAssetHandle,
+  RendererAssetLoadResult,
+  RendererAssetProvider,
+  RendererAssetRequest,
+  RendererAssetSnapshot,
+  RendererAssetStatus,
+} from "./assets.js";
 export { BoardRenderMode } from "./contracts.js";
 export type {
   BoardPresentationState,

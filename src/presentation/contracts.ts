@@ -4,6 +4,11 @@ import type {
   SpaceId,
 } from "../core/index.js";
 import type { MovementResult } from "../movement/index.js";
+import type { BoardAppearanceConfig } from "./appearance.js";
+import type {
+  BoardConnectionAppearance,
+  BoardConnectionPresentation,
+} from "./connections.js";
 
 export const BoardRenderMode = Object.freeze({
   TopDown: "top-down",
@@ -44,6 +49,9 @@ export interface BoardRenderInput<
   readonly snapshot: BoardSnapshot<TSpaceData, TPieceData>;
   readonly layout: SpaceLayout;
   readonly movement?: MovementResult;
+  readonly appearance?: BoardAppearanceConfig<TSpaceData, TPieceData>;
+  readonly connections?: readonly BoardConnectionPresentation[];
+  readonly connectionAppearance?: BoardConnectionAppearance;
 }
 
 export interface BoardPresentationState<
@@ -63,5 +71,5 @@ export interface BoardRenderer<
     target: TTarget,
     input: BoardRenderInput<TSpaceData, TPieceData>,
   ): void;
-  dispose?(): void;
+  dispose?(): void | Promise<void>;
 }

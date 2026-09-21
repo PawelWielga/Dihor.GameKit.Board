@@ -1,3 +1,15 @@
+export type {
+  ThreeBoardAsset,
+  ThreeBoardAssetProvider,
+  ThreeMaterialAsset,
+  ThreeModelAsset,
+  ThreePieceVisualAsset,
+  ThreePieceVisualFactoryContext,
+  ThreeSpaceVisualAsset,
+  ThreeSpaceVisualFactoryContext,
+  ThreeTextureAsset,
+} from "./assets.js";
+
 export { FlatBoard3DPiecesRenderer } from "./FlatBoard3DPiecesRenderer.js";
 export type {
   FlatBoard3DPiecesRendererOptions,
@@ -26,3 +38,9 @@ export type {
   Full3DProjection,
   ResolvedFull3DCameraOptions,
 } from "./full3dCamera.js";
+
+export {
+  applyThreeAppearanceTransform,
+  resolveThreeAppearanceTransform,
+} from "./appearanceMapping.js";
+export type { ThreeAppearanceTransform } from "./appearanceMapping.js";

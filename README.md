@@ -182,15 +182,21 @@ npm package naming follows the same convention:
 
 ## Prerelease package
 
-The first consumable prerelease is distributed as an npm-compatible GitHub Release asset:
+The current consumable prerelease is distributed as an npm-compatible GitHub Release asset:
 
 ```text
-@dihor/gamekit-board 0.1.0-preview.1
-tag: v0.1.0-preview.1
-asset: dihor-gamekit-board-0.1.0-preview.1.tgz
+@dihor/gamekit-board 0.1.0-preview.2
+tag: v0.1.0-preview.2
+asset: dihor-gamekit-board-0.1.0-preview.2.tgz
 ```
 
 Downstream projects can pin the release artifact directly from GitHub. The prerelease workflow validates typechecking, tests, the library build, demo build, package contents and SHA-256 checksum before publication.
+
+## Development workflow
+
+Ongoing work is integrated on `dev`; `main` is the release branch. After every release merge, synchronize the resulting `main` history back into `dev` so the branches do not diverge.
+
+See [docs/branch-workflow.md](docs/branch-workflow.md) for the release and synchronization rules.
 
 ## Status
 
