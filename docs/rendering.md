@@ -290,7 +290,7 @@ mapping happens.
 | space texture | not required by the HTML demo | yes | yes |
 | custom space 3D visual | not applicable | ignored gracefully | yes |
 | piece color / opacity | yes | yes | yes |
-| piece icon / label | yes | ignored gracefully | ignored gracefully |
+| piece icon / label | yes | yes (label text, icon fallback) | yes (label text, icon fallback) |
 | piece scale / rotation / offset | yes | yes | yes |
 | custom piece 3D visual / model | not applicable | yes | yes |
 | logical material key | not applicable | yes for default pieces | yes for spaces and default pieces |
