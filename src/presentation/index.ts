@@ -1,4 +1,15 @@
 export {
+  createTopologyConnections,
+  DEFAULT_CONNECTION_APPEARANCE,
+  mapConnectionsToPresentation,
+  resolveConnectionAppearance,
+} from "./connections.js";
+export type {
+  BoardConnectionAppearance,
+  BoardConnectionPresentation,
+  BoardConnectionSegment,
+} from "./connections.js";
+export {
   AppearanceAssetKind,
   AppearanceState,
   DEFAULT_PIECE_APPEARANCE,
