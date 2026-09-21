@@ -41,6 +41,10 @@ import {
   resolveThreeAppearanceTransform,
 } from "./appearanceMapping.js";
 import { resolveThreeAppearanceAssetKind } from "./assets.js";
+import {
+  createPieceLabelSprite,
+  disposeRendererOwnedLabelTexture,
+} from "./pieceLabel.js";
 import type {
   ThreeBoardAsset,
   ThreeBoardAssetProvider,
@@ -735,6 +739,12 @@ function createPawn(
   head.castShadow = shadows;
   group.add(head);
 
+  const label = createPieceLabelSprite(appearance, radius * 2.8);
+  if (label) {
+    label.position.y = height * 1.28;
+    group.add(label);
+  }
+
   return group;
 }
 
@@ -767,6 +777,7 @@ function disposeScene(scene: Scene): void {
   const materials = new Set<Material>();
 
   scene.traverse((object) => {
+    disposeRendererOwnedLabelTexture(object);
     const mesh = object as Mesh;
     if (mesh.geometry) {
       geometries.add(mesh.geometry);

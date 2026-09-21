@@ -121,6 +121,49 @@ describe("external appearance resolution", () => {
     expect(piece).toEqual(before);
   });
 
+  it("resolves A/B/C/D-style labels and active presentation state without mutating pieces", () => {
+    const piece: Piece = { id: "A" };
+    const before = structuredClone(piece);
+
+    const appearance = resolvePieceAppearance(piece, {
+      pieces: {
+        A: {
+          appearance: {
+            label: {
+              text: "A",
+              color: "#ffffff",
+            },
+            icon: "A",
+          },
+        },
+      },
+      pieceStates: {
+        A: { active: true },
+      },
+      theme: {
+        pieceDefault: {
+          variants: {
+            [AppearanceState.Active]: {
+              scale: 1.2,
+              color: "#ffcc00",
+            },
+          },
+        },
+      },
+    });
+
+    expect(appearance).toMatchObject({
+      color: "#ffcc00",
+      scale: 1.2,
+      icon: "A",
+      label: {
+        text: "A",
+        color: "#ffffff",
+      },
+    });
+    expect(piece).toEqual(before);
+  });
+
   it("ignores missing named styles and retains fallback values", () => {
     const space: Space = { id: "unknown-style" };
 
