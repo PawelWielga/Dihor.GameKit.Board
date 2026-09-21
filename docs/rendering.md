@@ -277,6 +277,37 @@ continue to use their dedicated `texture` and `material` appearance keys.
 Renderer adapters remain responsible for applying those resources and for
 disposing per-instance scene objects they create.
 
+## Topology connection presentation
+
+Visible links are presentation data derived from the authoritative topology. The
+renderer never infers a passage merely because two spaces happen to be adjacent
+on screen.
+
+```ts
+const connections = createTopologyConnections(board.topology!);
+
+renderer.render(canvas, {
+  snapshot: board.snapshot(),
+  layout,
+  connections,
+  connectionAppearance: {
+    color: "#6b7280",
+    opacity: 0.9,
+    width: 0.3,
+  },
+});
+```
+
+`createTopologyConnections()` works with arbitrary graph topologies and
+deduplicates reciprocal neighbor relations for rendering. The resulting links
+can be mapped through any `SpaceLayout`; missing endpoint positions fail
+explicitly instead of drawing a guessed connection.
+
+`FlatBoard3DPiecesRenderer` draws reusable flat passage strips beneath spaces,
+while `Full3DRenderer` draws shallow 3D links. The TopDown HTML/SVG demo uses
+the same derived connection list. Connection appearance is presentation-only
+and does not alter topology, movement legality, occupancy or Board snapshots.
+
 ## Appearance behavior across render modes
 
 The same `BoardAppearanceConfig` can be passed to every render mode. Appearance
