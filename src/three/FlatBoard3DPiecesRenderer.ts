@@ -28,9 +28,11 @@ import type { Piece, PieceId, Space, SpaceId } from "../core/index.js";
 import type { MovementResult } from "../movement/index.js";
 import {
   BoardRenderMode,
+  mapConnectionsToPresentation,
   mapPiecesToPresentation,
   RendererAssetCache,
   RendererAssetKind,
+  resolveConnectionAppearance,
   resolvePieceAppearance,
   resolveSpaceAppearance,
 } from "../presentation/index.js";
@@ -320,6 +322,43 @@ implements BoardRenderer<HTMLCanvasElement> {
     const spaceById = new Map<SpaceId, Space>(
       input.snapshot.spaces.map((space) => [space.id, space]),
     );
+
+    for (const segment of mapConnectionsToPresentation(
+      input.connections ?? [],
+      input.layout,
+    )) {
+      const appearance = resolveConnectionAppearance(
+        segment.connection,
+        input.connectionAppearance,
+      );
+      const fromX = segment.from.x;
+      const fromY = -segment.from.z;
+      const toX = segment.to.x;
+      const toY = -segment.to.z;
+      const dx = toX - fromX;
+      const dy = toY - fromY;
+      const length = Math.hypot(dx, dy);
+      if (length === 0) {
+        continue;
+      }
+
+      const material = new MeshBasicMaterial({
+        color: new Color(appearance.color),
+        opacity: appearance.opacity,
+        transparent: appearance.opacity < 1,
+      });
+      const connection = new Mesh(
+        new PlaneGeometry(length, appearance.width),
+        material,
+      );
+      connection.position.set(
+        (fromX + toX) / 2,
+        (fromY + toY) / 2,
+        -0.02,
+      );
+      connection.rotation.z = Math.atan2(dy, dx);
+      boardScene.add(connection);
+    }
 
     for (const space of input.layout.getSpaces()) {
       const domainSpace = spaceById.get(space.spaceId) ?? { id: space.spaceId };
