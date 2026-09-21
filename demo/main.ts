@@ -7,6 +7,7 @@ import {
   createLinearSpaceLayout,
   createMovementEvents,
   createSquareGridSpaceLayout,
+  createTopologyConnections,
   GraphTopology,
   LinearTopology,
   MovementError,
@@ -899,6 +900,7 @@ function tryRenderHybridBoard(): boolean {
       snapshot: board.snapshot(),
       layout: createPresentationLayout(),
       appearance: activeAppearance,
+      connections: createTopologyConnections(topology),
       ...(lastMovement ? { movement: lastMovement } : {}),
     });
     webglTargetLifecycle.activate(hybridRenderer, canvas);
