@@ -1,5 +1,6 @@
 import {
   AmbientLight,
+  BoxGeometry,
   Camera,
   Color,
   CylinderGeometry,
@@ -24,9 +25,11 @@ import type { Piece, PieceId, Space, SpaceId } from "../core/index.js";
 import type { MovementResult } from "../movement/index.js";
 import {
   BoardRenderMode,
+  mapConnectionsToPresentation,
   mapPiecesToPresentation,
   RendererAssetCache,
   RendererAssetKind,
+  resolveConnectionAppearance,
   resolvePieceAppearance,
   resolveSpaceAppearance,
 } from "../presentation/index.js";
@@ -304,6 +307,42 @@ export class Full3DRenderer implements BoardRenderer<HTMLCanvasElement> {
     const spaceById = new Map<SpaceId, Space>(
       input.snapshot.spaces.map((space) => [space.id, space]),
     );
+
+    for (const segment of mapConnectionsToPresentation(
+      input.connections ?? [],
+      input.layout,
+    )) {
+      const appearance = resolveConnectionAppearance(
+        segment.connection,
+        input.connectionAppearance,
+      );
+      const dx = segment.to.x - segment.from.x;
+      const dz = segment.to.z - segment.from.z;
+      const length = Math.hypot(dx, dz);
+      if (length === 0) {
+        continue;
+      }
+
+      const material = new MeshStandardMaterial({
+        color: new Color(appearance.color),
+        opacity: appearance.opacity,
+        transparent: appearance.opacity < 1,
+        roughness: 0.82,
+        metalness: 0,
+      });
+      const connection = new Mesh(
+        new BoxGeometry(length, 0.04, appearance.width),
+        material,
+      );
+      connection.position.set(
+        (segment.from.x + segment.to.x) / 2,
+        (segment.from.y + segment.to.y) / 2 - 0.025,
+        (segment.from.z + segment.to.z) / 2,
+      );
+      connection.rotation.y = -Math.atan2(dz, dx);
+      connection.receiveShadow = this.#options.shadows;
+      scene.add(connection);
+    }
 
     for (const space of input.layout.getSpaces()) {
       const domainSpace = spaceById.get(space.spaceId) ?? { id: space.spaceId };
