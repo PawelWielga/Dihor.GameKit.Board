@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.1.0-preview.2 - 2026-09-21
+
+- Adds consumer-provided appearance themes, entity overrides, presentation-state variants and async renderer asset integration.
+- Adds readable piece labels/icons to the FlatBoard3DPieces and Full3D reference renderers.
+- Adds renderer-neutral topology-connection presentation derived from actual topology neighbors.
+- Renders reusable topology links in TopDown demo, FlatBoard3DPieces and Full3D without changing movement or occupancy semantics.
+- Improves renderer target lifecycle and defers async asset refresh while movement animation is active.
+
+
 - Initialized `Dihor.GameKit.Board` as part of the Dihor.GameKit family.
 - Reserved npm package identity `@dihor/gamekit-board`.
 - Established the framework-agnostic architecture direction for board topology and piece movement.
