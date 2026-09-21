@@ -9,6 +9,8 @@ Reusable, framework-agnostic board and piece movement toolkit for games and appl
 
 `Dihor.GameKit.Board` owns the logical model of a board and movement of pieces across it. It is intentionally independent from rendering engines, UI frameworks and networking transports.
 
+For the exact Board scope required by the PartyBeam/Grimcellar First MVP, including what is intentionally deferred, see [docs/partybeam-first-mvp-roadmap.md](docs/partybeam-first-mvp-roadmap.md).
+
 The library should support different board topologies without forcing every game into a rectangular grid:
 
 - arbitrary graphs of connected spaces,
