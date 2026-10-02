@@ -5,6 +5,14 @@ Reusable, framework-agnostic board and piece movement toolkit for games and appl
 > **Dihor.GameKit** family  
 > This repository is part of the same GameKit series as [Dihor.GameKit.Dice](https://github.com/PawelWielga/Dihor.GameKit.Dice).
 
+## Relationship to PartyBeam
+
+This GameKit remains a general-purpose library. PartyBeam is one consumer, not the owner of its API.
+
+`PartyBeam.GameSdk` is a separate PartyBeam-specific contract/tooling layer and must not become a dependency of this package. PartyBeam games may consume this GameKit and GameSdk side by side.
+
+Keep only genuinely reusable board/topology/movement/presentation capabilities here. PartyBeam session lifecycle, Game Contract methods, package/catalog policy and game-specific rules belong elsewhere.
+
 ## Purpose
 
 `Dihor.GameKit.Board` owns the logical model of a board and movement of pieces across it. It is intentionally independent from rendering engines, UI frameworks and networking transports.
